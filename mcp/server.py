@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 ROOT = Path(__file__).resolve().parent
 ENGINE = ROOT / "engine"
 TEMPLATES = ROOT / "assets" / "templates"
@@ -243,7 +243,7 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
         requested = message.get("params", {}).get("protocolVersion", "2025-06-18")
         return _response(request_id, {"protocolVersion": requested,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "drawing-estimate-reader", "version": VERSION}})
+            "serverInfo": {"name": "engineering-drawing-estimator", "version": VERSION}})
     if method == "notifications/initialized":
         return None
     if method == "ping":

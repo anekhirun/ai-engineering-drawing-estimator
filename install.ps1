@@ -28,7 +28,7 @@ Copy-Item (Join-Path $SkillSource "*") $SkillTarget -Recurse -Force
 $EscapedPython = $Python.Replace("\", "\\")
 $EscapedServer = (Join-Path $Root "mcp\server.py").Replace("\", "\\")
 $Snippet = @"
-[mcp_servers.drawing-estimate-reader]
+[mcp_servers.engineering-drawing-estimator]
 command = "$EscapedPython"
 args = ["$EscapedServer"]
 startup_timeout_sec = 30

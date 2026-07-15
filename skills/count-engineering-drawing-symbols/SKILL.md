@@ -5,12 +5,12 @@ description: Count and audit electrical and communication symbols in engineering
 
 # Count Engineering Drawing Symbols
 
-Use the `drawing-estimate-reader` MCP tools. Treat every automatic detection as a candidate until it is visually confirmed.
+Use the `engineering-drawing-estimator` MCP tools. Treat every automatic detection as a candidate until it is visually confirmed.
 
 ## Workflow
 
 1. Call `inspect_drawing` before analysis.
-2. Prefer DWG/DXF block, attribute, layer, and XREF extraction when CAD is available. For this v0.1.1 MCP, process vector/hybrid PDF directly.
+2. Prefer DWG/DXF block, attribute, layer, and XREF extraction when CAD is available. For this v0.1.2 MCP, process vector/hybrid PDF directly.
 3. Call `render_page` at 400-600 DPI for final review and identify page boundaries, floor-plan regions, legend, title block, details, demolition/existing areas, and schedules.
 4. Read [references/symbol-rules.md](references/symbol-rules.md) before classifying socket or data symbols.
 5. Call `detect_symbol_candidates` separately for each symbol and page. Keep a high-recall shortlist.
@@ -27,7 +27,7 @@ Use the `drawing-estimate-reader` MCP tools. Treat every automatic detection as 
 - Keep Duplex, Single, and Data separate even when symbols touch or share a conduit.
 - Require coordinates for every counted item. A total without locations is incomplete.
 - If `confirm_symbol_count` returns `review_warning`, the zero is provisional until the candidate set and wall sweep are explicitly reviewed.
-- State uncertainty and detection method. Do not claim production-grade automatic accuracy in v0.1.1.
+- State uncertainty and detection method. Do not claim production-grade automatic accuracy in v0.1.2.
 
 ## Failure handling
 
