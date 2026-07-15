@@ -1,0 +1,10 @@
+interface:
+  display_name: "Engineering Drawing Symbol Counter"
+  short_description: "Count and review DWG/PDF engineering symbols"
+  default_prompt: "Use $count-engineering-drawing-symbols to count socket and data symbols in this engineering drawing with auditable markup."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "drawing-estimate-reader"
+      description: "Local PDF vector extraction, candidate detection, review, and markup tools"
+      transport: "stdio"

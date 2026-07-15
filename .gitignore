@@ -1,0 +1,30 @@
+# Local project data and generated evidence
+/.agents/
+/output/
+/tmp/
+/release/
+/work/
+/test-runs/
+
+# Local runtime and agent configuration
+**/.venv/
+**/__pycache__/
+*.py[cod]
+codex-mcp-config.toml
+.env
+.env.*
+
+# Generated analysis artifacts
+marked_candidates*.png
+candidates.json
+candidates.csv
+diagnostics.json
+quantity_report.json
+quantity_report.csv
+review.html
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
