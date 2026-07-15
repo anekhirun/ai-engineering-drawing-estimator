@@ -24,6 +24,7 @@ def main() -> None:
     report = {
         "status": "ok",
         "version": VERSION,
+        "server_name": initialized["result"]["serverInfo"]["name"],
         "protocol": initialized["result"]["protocolVersion"],
         "tools": tool_names,
         "dependencies": {

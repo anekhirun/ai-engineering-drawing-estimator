@@ -1,6 +1,8 @@
-# Drawing Estimate Reader v0.1.1
+# AI Engineering Drawing Estimator v0.1.2
 
-An assisted-review Skill and local MCP server for counting electrical and communication symbols in engineering PDF drawings.
+**AI Agent MCP for Symbol Counting and Quantity Takeoff**
+
+An assisted-review MCP server and Agent Skill for counting electrical and communication symbols in engineering PDF drawings with ChatGPT Codex, Hermes, and other MCP-compatible AI agents.
 
 > This is not a fully automatic quantity takeoff system. Every candidate must be reviewed before reporting a final count.
 
@@ -43,6 +45,8 @@ The installer:
 4. Generates `codex-mcp-config.toml` with the local MCP command.
 
 Add the generated MCP block to `~/.codex/config.toml`, then restart the agent.
+
+When upgrading from v0.1.1, remove the old `[mcp_servers.drawing-estimate-reader]` block and use the generated `[mcp_servers.engineering-drawing-estimator]` block.
 
 For another agent, register a `stdio` MCP server using:
 
