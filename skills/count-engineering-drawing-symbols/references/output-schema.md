@@ -22,3 +22,22 @@ Required report artifacts:
 - CSV and JSON with one row/object per confirmed detection.
 - Markup image showing every confirmed location and ID.
 - Explicit list of manual additions and uncertain/rejected candidates when relevant.
+
+Required review evidence:
+
+```json
+{
+  "review_complete": true,
+  "clarification_required": false,
+  "accepted_ids": ["C-0001"],
+  "rejected_ids": ["C-0002"],
+  "uncertain_ids": [],
+  "unresolved_ids": [],
+  "wall_door_sweep_completed": true,
+  "review_notes": "Checked wall faces, corners, and both sides of doors."
+}
+```
+
+A count is final only when `review_complete` is `true`.
+If `clarification_required` is `true`, ask the user about the affected markup
+IDs or coordinates and rerun confirmation after recording the answer.

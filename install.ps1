@@ -40,4 +40,5 @@ Set-Content -Path $SnippetPath -Value $Snippet -Encoding UTF8
 
 Write-Host "Installed skill: $SkillTarget"
 Write-Host "MCP config snippet: $SnippetPath"
+Write-Host "Optional experimental Windows Desktop App: .\start-desktop.ps1"
 Write-Host "Add the snippet to $HOME\.codex\config.toml, then restart the AI Agent."

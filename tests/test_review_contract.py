@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import fitz
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "mcp"))
+
+from server import TOOLS, VERSION, confirm_symbol_count  # noqa: E402
+
+
+class ReviewContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.pdf = self.root / "drawing.pdf"
+        document = fitz.open()
+        document.new_page(width=300, height=200)
+        document.save(self.pdf)
+
+        self.template = self.root / "template.json"
+        self.template.write_text(
+            json.dumps({"width_pt": 10, "height_pt": 10}),
+            encoding="utf-8",
+        )
+        self.candidates = self.root / "candidates.json"
+        self.candidates.write_text(
+            json.dumps(
+                [
+                    {
+                        "candidate_id": "C-0001",
+                        "center_x_pt": 50,
+                        "center_y_pt": 60,
+                        "constellation_error": 0.08,
+                        "score": 0.09,
+                    },
+                    {
+                        "candidate_id": "C-0002",
+                        "center_x_pt": 150,
+                        "center_y_pt": 120,
+                        "constellation_error": 0.10,
+                        "score": 0.11,
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def base_args(self, output_name: str) -> dict[str, object]:
+        return {
+            "pdf_path": str(self.pdf),
+            "template_path": str(self.template),
+            "candidates_json": str(self.candidates),
+            "symbol_id": "DUPLEX_SOCKET_OUTLET",
+            "page": 1,
+            "dpi": 150,
+            "accepted_ids": ["C-0001"],
+            "output_dir": str(self.root / output_name),
+        }
+
+    def test_complete_review_is_final_and_auditable(self) -> None:
+        args = self.base_args("complete")
+        args.update(
+            {
+                "rejected_ids": ["C-0002"],
+                "uncertain_ids": [],
+                "wall_door_sweep_completed": True,
+                "floor_or_region": "GROUND FLOOR",
+                "review_notes": "Checked walls, corners, and doors.",
+            }
+        )
+
+        result = confirm_symbol_count(args)
+        report = json.loads(Path(result["report_json"]).read_text(encoding="utf-8"))
+
+        self.assertTrue(result["review_complete"])
+        self.assertFalse(result["clarification_required"])
+        self.assertEqual(result["unresolved_ids"], [])
+        self.assertEqual(report["rejected_ids"], ["C-0002"])
+        self.assertEqual(report["floor_or_region"], "GROUND FLOOR")
+        self.assertEqual(report["detections"][0]["floor_or_region"], "GROUND FLOOR")
+
+    def test_legacy_call_remains_valid_but_not_final(self) -> None:
+        result = confirm_symbol_count(self.base_args("legacy"))
+
+        self.assertFalse(result["review_complete"])
+        self.assertTrue(result["clarification_required"])
+        self.assertEqual(result["unresolved_ids"], ["C-0002"])
+        self.assertFalse(result["wall_door_sweep_completed"])
+        self.assertIn("unreviewed", result["review_warning"])
+
+    def test_uncertain_candidate_requires_user_clarification(self) -> None:
+        args = self.base_args("uncertain")
+        args.update(
+            {
+                "uncertain_ids": ["C-0002"],
+                "wall_door_sweep_completed": True,
+            }
+        )
+
+        result = confirm_symbol_count(args)
+
+        self.assertFalse(result["review_complete"])
+        self.assertTrue(result["clarification_required"])
+        self.assertEqual(result["uncertain_ids"], ["C-0002"])
+        self.assertIn("uncertain", result["review_warning"])
+
+    def test_version_and_tool_surface(self) -> None:
+        self.assertEqual(VERSION, "0.1.3")
+        self.assertEqual(len(TOOLS), 7)
+        confirm_tool = next(tool for tool in TOOLS if tool["name"] == "confirm_symbol_count")
+        properties = confirm_tool["inputSchema"]["properties"]
+        self.assertIn("rejected_ids", properties)
+        self.assertIn("wall_door_sweep_completed", properties)
+        self.assertIn("prepare_sheet_audit", {tool["name"] for tool in TOOLS})
+
+
+if __name__ == "__main__":
+    unittest.main()

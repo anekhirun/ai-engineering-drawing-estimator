@@ -29,6 +29,8 @@ def main() -> None:
     parser.add_argument("template")
     parser.add_argument("candidates_json")
     parser.add_argument("--accept", nargs="*", default=[])
+    parser.add_argument("--reject", nargs="*", default=[])
+    parser.add_argument("--uncertain", nargs="*", default=[])
     parser.add_argument(
         "--manual-point",
         nargs=2,
@@ -40,6 +42,9 @@ def main() -> None:
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument("--symbol-id", default="DUPLEX_SOCKET_OUTLET")
+    parser.add_argument("--floor-or-region")
+    parser.add_argument("--wall-door-sweep-completed", action="store_true")
+    parser.add_argument("--review-notes", default="")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -50,10 +55,29 @@ def main() -> None:
         raise ValueError(f"page must be between 1 and {len(doc)}")
     page = doc[args.page - 1]
     accepted_ids = set(args.accept)
+    rejected_ids = set(args.reject)
+    uncertain_ids = set(args.uncertain)
+    decision_groups = {
+        "accepted": accepted_ids,
+        "rejected": rejected_ids,
+        "uncertain": uncertain_ids,
+    }
+    overlaps = {
+        candidate_id
+        for candidate_id in accepted_ids | rejected_ids | uncertain_ids
+        if sum(candidate_id in values for values in decision_groups.values()) > 1
+    }
+    if overlaps:
+        raise ValueError(
+            f"Candidate IDs cannot have multiple decisions: {sorted(overlaps)}"
+        )
+    candidate_ids = {str(candidate["candidate_id"]) for candidate in candidates}
+    reviewed_ids = accepted_ids | rejected_ids | uncertain_ids
+    unknown_ids = reviewed_ids - candidate_ids
+    if unknown_ids:
+        raise RuntimeError(f"Candidate IDs not found: {sorted(unknown_ids)}")
+    unresolved_ids = sorted(candidate_ids - reviewed_ids)
     accepted = [c for c in candidates if c["candidate_id"] in accepted_ids]
-    missing = accepted_ids - {c["candidate_id"] for c in accepted}
-    if missing:
-        raise RuntimeError(f"Candidate IDs not found: {sorted(missing)}")
     for index, point in enumerate(args.manual_point, 1):
         x_pt, y_pt = map(float, point)
         if not (0 <= x_pt <= page.rect.width and 0 <= y_pt <= page.rect.height):
@@ -81,6 +105,7 @@ def main() -> None:
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     records = []
+    floor_or_region = args.floor_or_region or f"PAGE {args.page}"
     for index, candidate in enumerate(
         sorted(accepted, key=lambda c: (c["center_y_pt"], c["center_x_pt"])), 1
     ):
@@ -107,6 +132,7 @@ def main() -> None:
                 "candidate_id": candidate["candidate_id"],
                 "symbol_id": args.symbol_id,
                 "page": args.page,
+                "floor_or_region": floor_or_region,
                 "center_x_pt": x,
                 "center_y_pt": y,
                 "constellation_error": candidate["constellation_error"],
@@ -127,21 +153,40 @@ def main() -> None:
         != "manual_visual_confirmation"
     )
     manual_count = len(accepted) - accepted_detector_count
-    review_warning = None
-    if candidates and not accepted:
-        review_warning = (
-            "No detector candidates or manual points were accepted. "
-            "Treat confirmed_count=0 as pending review until every candidate "
-            "and wall/door region has been checked."
-        )
+    review_complete = (
+        not unresolved_ids
+        and not uncertain_ids
+        and args.wall_door_sweep_completed
+    )
+    clarification_required = bool(unresolved_ids or uncertain_ids)
+    warning_parts = []
+    if unresolved_ids:
+        warning_parts.append(f"{len(unresolved_ids)} candidates remain unreviewed")
+    if uncertain_ids:
+        warning_parts.append(f"{len(uncertain_ids)} candidates remain uncertain")
+    if not args.wall_door_sweep_completed:
+        warning_parts.append("wall/door sweep is not confirmed")
+    review_warning = "; ".join(warning_parts) or None
     report = {
         "source_pdf": str(Path(args.pdf)),
         "page": args.page,
+        "floor_or_region": floor_or_region,
         "symbol_id": args.symbol_id,
         "confirmed_count": len(records),
         "detector_candidate_count": len(candidates),
         "accepted_detector_count": accepted_detector_count,
+        "rejected_count": len(rejected_ids),
+        "uncertain_count": len(uncertain_ids),
+        "unresolved_count": len(unresolved_ids),
         "manual_count": manual_count,
+        "accepted_ids": sorted(accepted_ids),
+        "rejected_ids": sorted(rejected_ids),
+        "uncertain_ids": sorted(uncertain_ids),
+        "unresolved_ids": unresolved_ids,
+        "wall_door_sweep_completed": args.wall_door_sweep_completed,
+        "review_complete": review_complete,
+        "clarification_required": clarification_required,
+        "review_notes": args.review_notes,
         "review_warning": review_warning,
         "detections": records,
     }
@@ -153,6 +198,7 @@ def main() -> None:
         "candidate_id",
         "symbol_id",
         "page",
+        "floor_or_region",
         "center_x_pt",
         "center_y_pt",
         "constellation_error",

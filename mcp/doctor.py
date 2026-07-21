@@ -5,6 +5,7 @@ import json
 import cv2
 import fitz
 import numpy
+import PySide6
 from PIL import Image
 
 from server import VERSION, handle
@@ -19,8 +20,8 @@ def main() -> None:
     })
     tools = handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     tool_names = [item["name"] for item in tools["result"]["tools"]]
-    if len(tool_names) != 6:
-        raise RuntimeError(f"Expected 6 MCP tools, found {len(tool_names)}")
+    if len(tool_names) != 7:
+        raise RuntimeError(f"Expected 7 MCP tools, found {len(tool_names)}")
     report = {
         "status": "ok",
         "version": VERSION,
@@ -32,6 +33,7 @@ def main() -> None:
             "pymupdf": fitz.__version__,
             "numpy": numpy.__version__,
             "pillow": Image.__version__,
+            "pyside6": PySide6.__version__,
         },
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -14,11 +14,23 @@
 - A nearby `4` can be a circuit/circuit-breaker label, not four outlets.
 - Do not reclassify rotated Duplex symbols as Single merely because one bar is obscured.
 
-## Data Outlet
+## Fire Alarm
 
-- Common shape: broken/open `C`-like geometry.
-- Often paired immediately beside a Duplex Socket Outlet.
-- Distinguish from door arcs, revision clouds, and open circles in annotations.
+- Use the current project legend as the authoritative mapping for control panels,
+  detectors, bells, manual stations, strobes, and end-of-line accessories.
+- Build a project-specific vector template for each Fire Alarm class. v0.1.3 does
+  not provide universal Fire Alarm starter geometry.
+- Letters such as `S`, `F`, `B`, and `WP` may appear in notes or in compound
+  device groups. Treat every match as a review candidate and confirm its context.
+- Keep detector temperature ratings separate. Do not infer a 135 F device when
+  only a 200 F symbol is visible, or vice versa.
+- Count end-of-line as an accessory subtotal unless the requested BOQ explicitly
+  includes it in the primary equipment total.
+
+## Deferred systems
+
+Data/Communication and all systems other than Power and Fire Alarm are outside
+the v0.1.3 release scope and are planned for v0.2.0.
 
 ## Context priority
 
