@@ -44,7 +44,12 @@ class PluginPackageTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('foreach ($Directory in @(".codex-plugin", "mcp", "skills"))', packager)
+        self.assertIn(
+            'foreach ($Directory in @(".codex-plugin", "docs", "mcp", "skills"))',
+            packager,
+        )
+        self.assertIn('"CHANGELOG.md"', packager)
+        self.assertIn('"ROADMAP.md"', packager)
         self.assertNotIn('Copy-Item -LiteralPath $Root', packager)
         self.assertIn("__pycache__", packager)
         self.assertIn("Plugin package is missing required file", packager)
