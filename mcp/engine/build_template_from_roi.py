@@ -43,9 +43,9 @@ def main() -> None:
         for descriptor in sorted(descriptors, key=descriptor_quality, reverse=True)
         if max(descriptor["width"], descriptor["height"], descriptor["length"]) >= 0.06
     ][: args.max_parts]
-    if len(compound) < 3:
+    if not compound:
         raise RuntimeError(
-            f"ROI contains only {len(compound)} useful parts; adjust the ROI."
+            "ROI contains no useful vector parts; adjust the ROI."
         )
 
     points = primitive_points_in_roi(selected, roi)
@@ -72,6 +72,11 @@ def main() -> None:
     print(f"ROI: {roi}")
     print(f"Primitive count: {len(selected)}")
     print(f"Compound part count: {len(compound)}")
+    if len(compound) < 3:
+        print(
+            "Warning: simple template has fewer than three compound parts; "
+            "use layer/context filtering and mandatory review."
+        )
     for index, descriptor in enumerate(compound, 1):
         print(
             f"Part {index}: cx={descriptor['cx']:.3f}, cy={descriptor['cy']:.3f}, "

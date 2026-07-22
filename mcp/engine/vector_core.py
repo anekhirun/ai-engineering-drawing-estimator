@@ -14,6 +14,8 @@ class Primitive:
     points: np.ndarray
     bbox: tuple[float, float, float, float]
     length: float
+    layer: str = ""
+    stroke_width: float = 0.0
 
 
 def _sample_cubic(p0, p1, p2, p3, count=12):
@@ -29,31 +31,45 @@ def _sample_cubic(p0, p1, p2, p3, count=12):
     return np.asarray(values, dtype=np.float32)
 
 
-def _primitive(points):
+def _primitive(points, *, layer="", stroke_width=0.0):
     points = np.asarray(points, dtype=np.float32)
     if len(points) < 2:
         return None
     x1, y1 = points.min(axis=0)
     x2, y2 = points.max(axis=0)
     length = float(np.linalg.norm(np.diff(points, axis=0), axis=1).sum())
-    return Primitive(points, (float(x1), float(y1), float(x2), float(y2)), length)
+    return Primitive(
+        points,
+        (float(x1), float(y1), float(x2), float(y2)),
+        length,
+        str(layer or ""),
+        float(stroke_width or 0.0),
+    )
 
 
-def extract_primitives(page: fitz.Page) -> list[Primitive]:
+def extract_primitives_from_drawings(drawings) -> list[Primitive]:
     result = []
-    for drawing in page.get_drawings():
+    for drawing in drawings:
+        metadata = {
+            "layer": drawing.get("layer", ""),
+            "stroke_width": drawing.get("width", 0.0),
+        }
         for item in drawing.get("items", []):
             kind = item[0]
 
             if kind == "l":
                 p1, p2 = item[1], item[2]
-                primitive = _primitive([[p1.x, p1.y], [p2.x, p2.y]])
+                primitive = _primitive(
+                    [[p1.x, p1.y], [p2.x, p2.y]], **metadata
+                )
                 if primitive:
                     result.append(primitive)
 
             elif kind == "c":
                 p0, p1, p2, p3 = item[1], item[2], item[3], item[4]
-                primitive = _primitive(_sample_cubic(p0, p1, p2, p3))
+                primitive = _primitive(
+                    _sample_cubic(p0, p1, p2, p3), **metadata
+                )
                 if primitive:
                     result.append(primitive)
 
@@ -64,7 +80,7 @@ def extract_primitives(page: fitz.Page) -> list[Primitive]:
                     [rect.x1, rect.y1], [rect.x0, rect.y1],
                     [rect.x0, rect.y0],
                 ]
-                primitive = _primitive(points)
+                primitive = _primitive(points, **metadata)
                 if primitive:
                     result.append(primitive)
 
@@ -77,11 +93,15 @@ def extract_primitives(page: fitz.Page) -> list[Primitive]:
                     [quad.ll.x, quad.ll.y],
                     [quad.ul.x, quad.ul.y],
                 ]
-                primitive = _primitive(points)
+                primitive = _primitive(points, **metadata)
                 if primitive:
                     result.append(primitive)
 
     return result
+
+
+def extract_primitives(page: fitz.Page) -> list[Primitive]:
+    return extract_primitives_from_drawings(page.get_drawings())
 
 
 def bbox_center(bbox):

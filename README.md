@@ -1,21 +1,36 @@
-# AI Engineering Drawing Estimator v0.1.3
+# AI Engineering Drawing Estimator v0.1.4
 
 **AI Agent MCP + Skill for reviewed symbol counting and quantity takeoff**
 
-An assisted-review MCP server and Agent Skill for counting Power and Fire Alarm symbols in engineering PDF drawings with ChatGPT Codex, Hermes, and other MCP-compatible AI agents. The MCP + Skill workflow is the primary interface in v0.1.3; the experimental Windows Desktop App remains available but is not the current development focus.
+An assisted-review MCP server and Agent Skill for counting Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering PDF drawings with ChatGPT Codex, Hermes, and other MCP-compatible AI agents. The MCP + Skill workflow is the primary interface in v0.1.4; the experimental Windows Desktop App remains available but is not the current development focus.
 
 > This is not a fully automatic quantity takeoff system. Every candidate must be reviewed before reporting a final count.
 
 ## Supported workflow
 
 - Inspect vector, hybrid, and raster PDF pages.
+- Classify pages with native Page Profiler v2, including confidence and evidence.
 - Render pages for visual review.
 - Prepare a complete one-sheet audit with one MCP call for:
-  - Power: Duplex Socket Outlet and Single Socket Outlet.
+  - Power: Duplex/Single Socket Outlet, 3P+N+E Power Receptacle, and Non-Fuse Disconnecting Switch.
+  - Lighting: switches, junction/control devices, normal luminaires, emergency lighting, and exit signs.
   - Fire Alarm: control panel, smoke detector, 135/200 F heat detector, bell,
     manual station, strobe light, and end-of-line accessory.
-- Use bundled starter templates for Power and project-specific legend templates for Fire Alarm.
-- Suppress candidates whose center overlaps PDF text by default.
+  - Data/Voice: panels, cabinets, telephone outlets, and RJ45 data outlets.
+  - CCTV/Security: cameras, monitoring, access-control, alarm, and door-control devices.
+- Use bundled starter templates where available and project-specific legend templates for every other class.
+- Candidate Filtering v2 measures text coverage across the whole symbol ROI,
+  not only its center.
+- Preserve PDF/CAD layer metadata and suppress strong text, dimension,
+  annotation, and non-outlet layer matches when a Power outlet layer exists.
+- Reuse one native `SheetContext` for primitives, descriptors, text boxes, spatial
+  index, and rendering across every symbol on the same sheet.
+- Exclude explicit legend, note, detail, or title-block rectangles in PDF points.
+- Optionally restrict detection to explicit plan rectangles with
+  `included_regions`.
+- Cache up to two prepared sheet contexts in memory without locking source PDFs on Windows;
+  unusually large renders are released while geometry remains cached.
+- Record template hashes, validation warnings, score breakdowns, and per-stage timing.
 - Create project-specific symbol templates from a clean legend ROI.
 - Export candidate crops, markup, CSV, JSON, and an HTML review page.
 - Confirm reviewed candidates and add manually verified points.
@@ -81,7 +96,7 @@ args:    mcp\server.py
 
 ```text
 Use $count-engineering-drawing-symbols to inspect this PDF.
-Run prepare_sheet_audit for POWER or FIRE_ALARM and count its supported symbols by floor.
+Run prepare_sheet_audit for POWER, LIGHTING, FIRE_ALARM, DATA_VOICE, or CCTV_SECURITY and count its supported symbols by floor.
 Create markup and review every candidate before reporting the quantities.
 If any symbol or candidate is uncertain, show its crop, markup ID, or coordinates and ask me before finalizing.
 ```
@@ -94,14 +109,44 @@ If any symbol or candidate is uncertain, show its crop, markup ID, or coordinate
 | `render_page` | Render a page for legend and plan review |
 | `get_symbol_rules` | Return supported symbol/context rules |
 | `build_symbol_template` | Build a project-specific vector template |
+| `analyze_vector_layers` | Group rotation-normalized vector signatures and apply a confirmed project mapping |
 | `detect_symbol_candidates` | Generate a high-recall candidate shortlist |
 | `confirm_symbol_count` | Export confirmed counts and auditable markup |
 | `prepare_sheet_audit` | Inspect, render, detect all ready symbols, and create one review contact sheet |
 
-## v0.1.3 scope and performance target
+## v0.1.4 native pipeline optimization
 
-- Supported systems: **Power** and **Fire Alarm** only.
-- Data/Communication and all other systems are deferred to v0.2.0.
+- `prepare_sheet_audit` prepares and renders a sheet once, then runs all ready
+  symbol templates against the shared native context.
+- Clean vector sheets can use `analyze_vector_layers` before template matching.
+  It groups paths by layer, shape family, and rotation-normalized dimensions;
+  it never assigns equipment names unless a project mapping was confirmed.
+- Store confirmed mappings in a local JSON file and pass
+  `signature_mapping_path` on later runs. Ambiguous mappings stop with
+  `clarification_required` instead of selecting a class automatically.
+- `inspect_drawing` reports `vector_clean`, `hybrid`, `vector_sparse`,
+  `raster_scan`, or `unknown`, plus confidence, evidence, and a compatibility flag.
+- `detect_symbol_candidates` remains available for one-symbol tuning and reuses
+  the same in-memory context when possible.
+- Candidate JSON retains the legacy `score` while adding `geometry_score`,
+  `final_score`, `score_version`, and filtering provenance.
+- Candidate Filtering v2 writes every automatically suppressed geometry match to
+  `filtered_candidates.json`, including its source layers and filter reasons.
+- `exclude_annotation_layers=false` disables layer-based suppression for unusual
+  drawings; final counts still require review.
+- `force_reprocess=true` bypasses the in-memory context cache.
+- MCP responses use `response_detail=compact` by default. Complete coordinates
+  and diagnostics remain in the returned JSON artifact paths; use
+  `response_detail=full` only for debugging or integration.
+- PDF vector paths are extracted once per shared sheet context and reused by the
+  page profiler, layer inventory, and detector.
+- The implementation remains Python, PyMuPDF, OpenCV, NumPy, and Pillow only;
+  v0.1.4 adds no external OCR, Java, or third-party PDF pipeline.
+
+## v0.1.4 scope and performance target
+
+- Supported systems: **Power**, **Lighting**, **Fire Alarm**, **Data/Voice**, and **CCTV/Security**.
+- Project-specific templates are required for classes without a bundled starter template.
 - Routine target for one vector/hybrid sheet and one system: no more than three
   minutes and approximately 500k agent tokens or less.
 - The time and token figures are workflow targets, not accuracy guarantees. Local
@@ -111,7 +156,7 @@ If any symbol or candidate is uncertain, show its crop, markup ID, or coordinate
   locally. It returned 42 high-recall candidates for 11 visually confirmed
   symbols, so candidate review remains mandatory, especially for Manual Station.
 
-## v0.1.3 review contract
+## v0.1.4 review contract
 
 `confirm_symbol_count` accepts `accepted_ids`, `rejected_ids`, `uncertain_ids`,
 `manual_points`, `floor_or_region`, review notes, and an explicit

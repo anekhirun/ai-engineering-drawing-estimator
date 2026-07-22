@@ -2,24 +2,22 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import math
 import time
-from collections import defaultdict
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
 import cv2
-import fitz
 import numpy as np
 
+from sheet_context import SheetContext, get_sheet_context
 from vector_core import (
     best_rotation_score,
-    extract_primitives,
     primitive_points_in_roi,
     points_to_mask,
-    select_primitives,
 )
 
 
@@ -30,64 +28,27 @@ class Candidate:
     center_y_pt: float
     constellation_error: float
     score: float
+    geometry_score: float
+    final_score: float
     rotation: int
     primitive_count: int
     detection_method: str = "pdf_vector_compound_match"
+    score_version: str = "native_v2"
+    text_overlap_penalty: float = 0.0
+    annotation_layer_penalty: float = 0.0
+    excluded_region_penalty: float = 0.0
+    source_layers: list[str] | None = None
+    filter_reasons: list[str] | None = None
     crop_file: str = ""
 
 
-class PrimitiveSpatialIndex:
-    """Small uniform grid for fast local primitive lookup."""
-
-    def __init__(self, descriptors, cell_size):
-        self.cell_size = max(float(cell_size), 1.0)
-        self.cells = defaultdict(list)
-        for index, descriptor in enumerate(descriptors):
-            key = (
-                math.floor(descriptor["cx"] / self.cell_size),
-                math.floor(descriptor["cy"] / self.cell_size),
-            )
-            self.cells[key].append(index)
-
-    def query_contained(self, roi, primitives):
-        x1, y1, x2, y2 = roi
-        gx1 = math.floor(x1 / self.cell_size)
-        gy1 = math.floor(y1 / self.cell_size)
-        gx2 = math.floor(x2 / self.cell_size)
-        gy2 = math.floor(y2 / self.cell_size)
-        result = []
-        for gx in range(gx1, gx2 + 1):
-            for gy in range(gy1, gy2 + 1):
-                for index in self.cells.get((gx, gy), ()):
-                    px1, py1, px2, py2 = primitives[index].bbox
-                    if x1 <= px1 and px2 <= x2 and y1 <= py1 and py2 <= y2:
-                        result.append(index)
-        return result
-
-
-def render_page(page, dpi):
-    pix = page.get_pixmap(dpi=dpi, alpha=False)
-    image = np.frombuffer(pix.samples, dtype=np.uint8)
-    image = image.reshape(pix.height, pix.width, pix.n)
-    if pix.n == 4:
-        return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
-    return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-
-def primitive_abs_descriptor(p):
-    x1, y1, x2, y2 = p.bbox
-    cx = (x1 + x2) / 2
-    cy = (y1 + y2) / 2
-    dx = p.points[-1, 0] - p.points[0, 0]
-    dy = p.points[-1, 1] - p.points[0, 1]
-    angle = math.degrees(math.atan2(dy, dx)) % 180.0
-    return {
-        "cx": cx, "cy": cy,
-        "width": x2 - x1,
-        "height": y2 - y1,
-        "length": p.length,
-        "angle": angle,
-    }
+ANNOTATION_LAYER_TOKENS = (
+    "TEXT", "DIM", "ANNO", "TITLE", "TTLN", "NOTE", "SPEC", "GRID",
+    "HATCH", "PHASING", "KEY  LOCATION", "KEY LOCATION",
+)
+SYMBOL_LAYER_TOKENS = (
+    "OUTLET", "SOCKET", "RECEPT", "POWER", "POWR", "DEVICE", "SYMBOL",
+)
 
 
 def angle_diff(a, b):
@@ -179,16 +140,6 @@ def nms(candidates, distance):
     return kept
 
 
-def text_boxes(page):
-    """Return PDF text boxes used to suppress obvious text/grid false positives."""
-    boxes = []
-    for word in page.get_text("words"):
-        if len(word) >= 4:
-            x1, y1, x2, y2 = map(float, word[:4])
-            boxes.append((x1, y1, x2, y2))
-    return boxes
-
-
 def center_overlaps_text(cx, cy, boxes, padding=0.8):
     return any(
         x1 - padding <= cx <= x2 + padding
@@ -197,7 +148,7 @@ def center_overlaps_text(cx, cy, boxes, padding=0.8):
     )
 
 
-def save_outputs(image, candidates, template, output, dpi):
+def save_outputs(image, candidates, template, output, dpi, suppressed=None):
     output.mkdir(parents=True, exist_ok=True)
     crops = output / "crops"
     crops.mkdir(exist_ok=True)
@@ -229,6 +180,37 @@ def save_outputs(image, candidates, template, output, dpi):
     (output / "candidates.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    suppressed_records = []
+    filtered_crops = output / "filtered_crops"
+    filtered_crops.mkdir(exist_ok=True)
+    filtered_marked = image.copy()
+    for i, candidate in enumerate(suppressed or [], 1):
+        candidate.candidate_id = f"F{i:03d}"
+        hw = template["width_pt"] * 1.8
+        hh = template["height_pt"] * 1.8
+        x1 = max(0, round((candidate.center_x_pt - hw) * scale))
+        y1 = max(0, round((candidate.center_y_pt - hh) * scale))
+        x2 = min(image.shape[1], round((candidate.center_x_pt + hw) * scale))
+        y2 = min(image.shape[0], round((candidate.center_y_pt + hh) * scale))
+        name = f"{candidate.candidate_id}.png"
+        cv2.imwrite(str(filtered_crops / name), image[y1:y2, x1:x2])
+        candidate.crop_file = f"filtered_crops/{name}"
+        cv2.rectangle(filtered_marked, (x1, y1), (x2, y2), (0, 165, 255), 3)
+        cv2.putText(
+            filtered_marked,
+            candidate.candidate_id,
+            (x1, max(22, y1 - 4)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 165, 255),
+            2,
+        )
+        suppressed_records.append(asdict(candidate))
+    cv2.imwrite(str(output / "filtered_candidates.png"), filtered_marked)
+    (output / "filtered_candidates.json").write_text(
+        json.dumps(suppressed_records, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     fields = list(records[0].keys()) if records else [
         "candidate_id", "center_x_pt", "center_y_pt",
@@ -251,7 +233,7 @@ def save_outputs(image, candidates, template, output, dpi):
     repeat(auto-fill,minmax(310px,1fr));gap:14px}}article{{display:flex;gap:12px;
     border:1px solid #aaa;padding:10px;border-radius:8px}}img{{width:160px;height:
     160px;object-fit:contain;border:1px solid #ddd}}</style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.3 Candidate Review</h1>
+    <h1>AI Engineering Drawing Estimator v0.1.4 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <main>{cards}</main></body></html>"""
     (output / "review.html").write_text(review, encoding="utf-8")
@@ -279,12 +261,12 @@ def write_interactive_review(candidates, output):
     article.uncertain{{border-color:#d28b00;background:#fff9e8}}
     .toolbar{{position:sticky;top:0;background:white;padding:10px 0;z-index:2}}
     </style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.3 Candidate Review</h1>
+    <h1>AI Engineering Drawing Estimator v0.1.4 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <div class="toolbar"><b id="counts"></b>
     <button onclick="exportDecisions()">Export decisions.json</button></div>
     <main>{cards}</main><script>
-    const storageKey = 'v33-decisions-' + location.pathname;
+    const storageKey = 'v014-decisions-' + location.pathname;
     const decisions = JSON.parse(localStorage.getItem(storageKey) || '{{}}');
     function paint(id) {{
       const card = document.getElementById('card-' + id);
@@ -314,6 +296,346 @@ def write_interactive_review(candidates, output):
     (output / "review.html").write_text(review, encoding="utf-8")
 
 
+def validate_template(template: dict) -> dict:
+    required = {"mask", "grid_size", "width_pt", "height_pt", "compound_parts"}
+    missing = sorted(required - set(template))
+    if missing:
+        raise ValueError(f"Template is missing required fields: {missing}")
+    if float(template["width_pt"]) <= 0 or float(template["height_pt"]) <= 0:
+        raise ValueError("Template width_pt and height_pt must be positive")
+    if int(template["grid_size"]) < 16:
+        raise ValueError("Template grid_size must be at least 16")
+    part_count = len(template["compound_parts"])
+    warnings = []
+    if part_count < 3:
+        warnings.append("Template has fewer than three compound parts and may be ambiguous.")
+    return {
+        "valid": True,
+        "compound_part_count": part_count,
+        "warnings": warnings,
+    }
+
+
+def normalize_excluded_regions(regions) -> list[list[float]]:
+    normalized = []
+    for index, region in enumerate(regions or [], 1):
+        if len(region) != 4:
+            raise ValueError(
+                f"excluded_regions item {index} must be [x1, y1, x2, y2]"
+            )
+        x1, y1, x2, y2 = map(float, region)
+        if x2 <= x1 or y2 <= y1:
+            raise ValueError(
+                f"excluded_regions item {index} must have x2>x1 and y2>y1"
+            )
+        normalized.append([x1, y1, x2, y2])
+    return normalized
+
+
+def normalize_included_regions(regions) -> list[list[float]]:
+    return normalize_excluded_regions(regions)
+
+
+def _center_in_regions(cx: float, cy: float, regions) -> bool:
+    return any(
+        len(region) == 4
+        and float(region[0]) <= cx <= float(region[2])
+        and float(region[1]) <= cy <= float(region[3])
+        for region in regions
+    )
+
+
+def _intersection_area(a, b) -> float:
+    return max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(
+        0.0, min(a[3], b[3]) - max(a[1], b[1])
+    )
+
+
+def text_overlap_ratio(roi, boxes, padding=0.4) -> float:
+    """Return bounded text coverage of a candidate ROI in PDF points."""
+    x1, y1, x2, y2 = map(float, roi)
+    area = max((x2 - x1) * (y2 - y1), 1e-6)
+    overlap = 0.0
+    for bx1, by1, bx2, by2 in boxes:
+        expanded = (
+            float(bx1) - padding,
+            float(by1) - padding,
+            float(bx2) + padding,
+            float(by2) + padding,
+        )
+        overlap += _intersection_area((x1, y1, x2, y2), expanded)
+    return min(overlap / area, 1.0)
+
+
+def _layer_has_token(layer: str, tokens) -> bool:
+    value = str(layer or "").upper()
+    return any(token in value for token in tokens)
+
+
+def layer_filter_evidence(primitives, roi, symbol_tokens=None) -> dict:
+    """Classify only primitives that contribute points inside the scoring ROI."""
+    layers = []
+    annotation_count = 0
+    symbol_count = 0
+    attributed_count = 0
+    x1, y1, x2, y2 = roi
+    active_symbol_tokens = tuple(symbol_tokens or SYMBOL_LAYER_TOKENS)
+    for primitive in primitives:
+        points = primitive.points
+        inside = (
+            (points[:, 0] >= x1) & (points[:, 0] <= x2)
+            & (points[:, 1] >= y1) & (points[:, 1] <= y2)
+        )
+        if not bool(inside.any()):
+            continue
+        layer = str(getattr(primitive, "layer", "") or "")
+        if not layer or layer in {"0", "00"}:
+            continue
+        attributed_count += 1
+        if layer not in layers:
+            layers.append(layer)
+        if _layer_has_token(layer, active_symbol_tokens):
+            symbol_count += 1
+        elif _layer_has_token(layer, ANNOTATION_LAYER_TOKENS):
+            annotation_count += 1
+    annotation_fraction = (
+        annotation_count / attributed_count if attributed_count else 0.0
+    )
+    return {
+        "source_layers": sorted(layers),
+        "attributed_primitive_count": attributed_count,
+        "annotation_primitive_count": annotation_count,
+        "symbol_primitive_count": symbol_count,
+        "annotation_fraction": annotation_fraction,
+        "suppress": (
+            attributed_count >= 3
+            and symbol_count == 0
+            and annotation_fraction >= 0.85
+        ),
+    }
+
+
+def detect_with_context(
+    context: SheetContext,
+    template_path: str | Path,
+    output: str | Path,
+    *,
+    constellation_tolerance: float = 0.24,
+    max_score: float = 0.16,
+    search_x_max: float = 0.74,
+    seed_step: float = 1.5,
+    anchor_length_tolerance: float = 0.18,
+    anchor_angle_tolerance: float = 10.0,
+    shortlist_limit: int = 20,
+    exclude_text: bool = True,
+    exclude_annotation_layers: bool = True,
+    text_overlap_threshold: float = 0.35,
+    excluded_regions=None,
+    included_regions=None,
+    preferred_layer_tokens=None,
+    context_cache_hit: bool = False,
+) -> dict:
+    started = time.perf_counter()
+    template_path = Path(template_path).resolve()
+    template_bytes = template_path.read_bytes()
+    template = json.loads(template_bytes.decode("utf-8"))
+    template_validation = validate_template(template)
+    template_hash = hashlib.sha256(template_bytes).hexdigest()[:16]
+    template_mask = np.asarray(template["mask"], dtype=np.uint8)
+    grid_size = int(template["grid_size"])
+    roi_w = float(template["width_pt"])
+    roi_h = float(template["height_pt"])
+    excluded_regions = normalize_excluded_regions(excluded_regions)
+    included_regions = normalize_included_regions(included_regions)
+    if not 0.0 <= float(text_overlap_threshold) <= 1.0:
+        raise ValueError("text_overlap_threshold must be between 0 and 1")
+
+    page = context.page
+    primitives = context.primitives
+    abs_desc = context.descriptors
+    spatial_index = context.spatial_index
+    text_bboxes = context.text_bboxes if exclude_text else []
+    preferred_layer_tokens = tuple(preferred_layer_tokens or ())
+    page_has_preferred_layers = bool(preferred_layer_tokens) and any(
+        _layer_has_token(getattr(item, "layer", ""), preferred_layer_tokens)
+        for item in primitives
+    )
+
+    anchor_parts = sorted(
+        template["compound_parts"], key=lambda part: part["length"], reverse=True
+    )[:2]
+    seeds = {}
+    for descriptor in abs_desc:
+        for target in anchor_parts:
+            expected_length = target["length"] * math.hypot(roi_w, roi_h)
+            if rel_error(descriptor["length"], expected_length) > anchor_length_tolerance:
+                continue
+            for rotation in (0, 90, 180, 270):
+                expected_angle = (target["angle"] + rotation) % 180
+                if angle_diff(descriptor["angle"], expected_angle) > anchor_angle_tolerance:
+                    continue
+                offset_x, offset_y = rotated_offset(target, roi_w, roi_h, rotation)
+                center_x = descriptor["cx"] - offset_x
+                center_y = descriptor["cy"] - offset_y
+                if not (0 <= center_x <= page.rect.width * search_x_max):
+                    continue
+                if not (page.rect.height * 0.02 <= center_y <= page.rect.height * 0.96):
+                    continue
+                key = (round(center_x / seed_step), round(center_y / seed_step))
+                seeds[key] = (center_x, center_y)
+    seeded_at = time.perf_counter()
+
+    constellation_matches = []
+    for cx, cy in seeds.values():
+        roi = [
+            cx - roi_w * 0.65,
+            cy - roi_h * 0.65,
+            cx + roi_w * 0.65,
+            cy + roi_h * 0.65,
+        ]
+        local_indices = spatial_index.query_contained(roi, primitives)
+        if len(local_indices) < 3 or len(local_indices) > 80:
+            continue
+        local_desc = [abs_desc[index] for index in local_indices]
+        c_error, rotation = constellation_error(
+            local_desc, template["compound_parts"], roi_w, roi_h, cx, cy
+        )
+        if c_error <= constellation_tolerance:
+            constellation_matches.append((cx, cy, c_error, rotation, local_indices))
+    constellation_at = time.perf_counter()
+
+    scored_candidates = []
+    excluded_region_filtered_count = 0
+    included_region_filtered_count = 0
+    for cx, cy, c_error, rotation, local_indices in constellation_matches:
+        if _center_in_regions(cx, cy, excluded_regions):
+            excluded_region_filtered_count += 1
+            continue
+        if included_regions and not _center_in_regions(cx, cy, included_regions):
+            included_region_filtered_count += 1
+            continue
+        roi = [cx - roi_w / 2, cy - roi_h / 2, cx + roi_w / 2, cy + roi_h / 2]
+        selected = [primitives[index] for index in local_indices]
+        overlap_ratio = text_overlap_ratio(roi, text_bboxes) if text_bboxes else 0.0
+        layer_evidence = layer_filter_evidence(
+            selected, roi, preferred_layer_tokens or None
+        )
+        points = primitive_points_in_roi(selected, roi)
+        mask = points_to_mask(points, roi, grid_size=grid_size)
+        geometry_score, mask_rotation = best_rotation_score(template_mask, mask)
+        if geometry_score <= max_score:
+            final_score = 0.65 * float(geometry_score) + 0.35 * float(c_error)
+            filter_reasons = []
+            if exclude_text and overlap_ratio >= text_overlap_threshold:
+                filter_reasons.append("pdf_text_overlaps_candidate_roi")
+            if exclude_annotation_layers and layer_evidence["suppress"]:
+                filter_reasons.append("annotation_only_vector_layers")
+            if (
+                exclude_annotation_layers
+                and page_has_preferred_layers
+                and layer_evidence["symbol_primitive_count"] == 0
+            ):
+                filter_reasons.append("outside_preferred_symbol_layers")
+            candidate = Candidate(
+                candidate_id="",
+                center_x_pt=float(cx),
+                center_y_pt=float(cy),
+                constellation_error=float(c_error),
+                score=float(geometry_score),
+                geometry_score=float(geometry_score),
+                final_score=final_score,
+                rotation=int(mask_rotation),
+                primitive_count=len(selected),
+                text_overlap_penalty=float(overlap_ratio),
+                annotation_layer_penalty=float(
+                    layer_evidence["annotation_fraction"]
+                ),
+                source_layers=layer_evidence["source_layers"],
+                filter_reasons=filter_reasons,
+            )
+            scored_candidates.append(candidate)
+
+    pre_filter_candidates = nms(
+        scored_candidates, min(roi_w, roi_h) * 0.65
+    )
+    suppressed_candidates = [
+        item for item in pre_filter_candidates if item.filter_reasons
+    ]
+    raw_candidates = [
+        item for item in pre_filter_candidates if not item.filter_reasons
+    ]
+    text_filtered_count = sum(
+        "pdf_text_overlaps_candidate_roi" in (item.filter_reasons or [])
+        for item in suppressed_candidates
+    )
+    annotation_layer_filtered_count = sum(
+        "annotation_only_vector_layers" in (item.filter_reasons or [])
+        for item in suppressed_candidates
+    )
+    preferred_layer_filtered_count = sum(
+        "outside_preferred_symbol_layers" in (item.filter_reasons or [])
+        for item in suppressed_candidates
+    )
+    # Preserve the v0.1.3 shortlist order so optimization cannot silently hide a
+    # previously visible high-recall candidate. final_score is diagnostic in
+    # v0.1.4 until it has drawing-backed regression evidence.
+    ranked = sorted(raw_candidates, key=lambda item: (item.score, item.constellation_error))
+    candidates = ranked[:shortlist_limit] if shortlist_limit > 0 else ranked
+    output_path = Path(output).resolve()
+    save_outputs(
+        context.image, candidates, template, output_path, context.dpi,
+        suppressed_candidates,
+    )
+    write_interactive_review(candidates, output_path)
+    finished = time.perf_counter()
+
+    diagnostics = {
+        "pipeline_version": "native_v2",
+        "candidate_filter_version": "2",
+        "page_has_preferred_layers": page_has_preferred_layers,
+        "preferred_layer_tokens": list(preferred_layer_tokens),
+        "context_id": context.context_id,
+        "context_cache_hit": context_cache_hit,
+        "page_profile": context.profile,
+        "template_hash": template_hash,
+        "template_validation": template_validation,
+        "primitive_count": len(primitives),
+        "seed_count": len(seeds),
+        "constellation_match_count": len(constellation_matches),
+        "pre_filter_candidate_count": len(pre_filter_candidates),
+        "raw_candidate_count": len(raw_candidates),
+        "shortlist_count": len(candidates),
+        "parameters": {
+            "constellation_tolerance": constellation_tolerance,
+            "max_score": max_score,
+            "search_x_max": search_x_max,
+            "shortlist_limit": shortlist_limit,
+            "exclude_text": exclude_text,
+            "exclude_annotation_layers": exclude_annotation_layers,
+            "text_overlap_threshold": text_overlap_threshold,
+            "excluded_regions": excluded_regions,
+            "included_regions": included_regions,
+            "text_filtered_count": text_filtered_count,
+            "annotation_layer_filtered_count": annotation_layer_filtered_count,
+            "preferred_layer_filtered_count": preferred_layer_filtered_count,
+            "excluded_region_filtered_count": excluded_region_filtered_count,
+            "included_region_filtered_count": included_region_filtered_count,
+            "suppressed_candidate_count": len(suppressed_candidates),
+        },
+        "timing_seconds": {
+            "shared_context_preparation": context.preparation_seconds,
+            "seed_generation": round(seeded_at - started, 3),
+            "constellation_search": round(constellation_at - seeded_at, 3),
+            "mask_scoring_and_output": round(finished - constellation_at, 3),
+            "detection_total": round(finished - started, 3),
+        },
+    }
+    (output_path / "diagnostics.json").write_text(
+        json.dumps(diagnostics, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return diagnostics
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("pdf")
@@ -329,140 +651,50 @@ def main():
     parser.add_argument("--shortlist-limit", type=int, default=20)
     parser.add_argument(
         "--exclude-text", dest="exclude_text", action="store_true", default=True,
-        help="Reject candidates whose center falls inside extracted PDF text.",
+        help="Reject candidates with substantial extracted-text coverage in the ROI.",
     )
     parser.add_argument(
         "--include-text", dest="exclude_text", action="store_false",
         help="Keep text-overlapping candidates for difficult project-specific symbols.",
     )
+    parser.add_argument(
+        "--include-annotation-layers",
+        dest="exclude_annotation_layers",
+        action="store_false",
+        default=True,
+        help="Keep candidates composed only from text/dimension/annotation layers.",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    started = time.perf_counter()
-
-    template = json.loads(Path(args.template).read_text(encoding="utf-8"))
-    template_mask = np.asarray(template["mask"], dtype=np.uint8)
-    grid_size = int(template["grid_size"])
-    roi_w = template["width_pt"]
-    roi_h = template["height_pt"]
-
-    doc = fitz.open(args.pdf)
-    page = doc[args.page - 1]
-    primitives = extract_primitives(page)
-    image = render_page(page, args.dpi)
-    text_bboxes = text_boxes(page) if args.exclude_text else []
-    abs_desc = [primitive_abs_descriptor(p) for p in primitives]
-    spatial_index = PrimitiveSpatialIndex(abs_desc, max(roi_w, roi_h) * 1.5)
-    extracted_at = time.perf_counter()
-
-    # Predict symbol centers from the two longest template parts.  This avoids
-    # treating every short text/arc primitive as a possible symbol center.
-    anchor_parts = sorted(
-        template["compound_parts"], key=lambda part: part["length"], reverse=True
-    )[:2]
-    seeds = {}
-    for d in abs_desc:
-        for target in anchor_parts:
-            expected_length = target["length"] * math.hypot(roi_w, roi_h)
-            if rel_error(d["length"], expected_length) > args.anchor_length_tolerance:
-                continue
-            for rotation in (0, 90, 180, 270):
-                expected_angle = (target["angle"] + rotation) % 180
-                if angle_diff(d["angle"], expected_angle) > args.anchor_angle_tolerance:
-                    continue
-                offset_x, offset_y = rotated_offset(target, roi_w, roi_h, rotation)
-                center_x = d["cx"] - offset_x
-                center_y = d["cy"] - offset_y
-                if not (0 <= center_x <= page.rect.width * args.search_x_max):
-                    continue
-                if not (page.rect.height * 0.02 <= center_y <= page.rect.height * 0.96):
-                    continue
-                key = (
-                    round(center_x / args.seed_step),
-                    round(center_y / args.seed_step),
-                )
-                seeds[key] = (center_x, center_y)
-    seeded_at = time.perf_counter()
-
-    constellation_matches = []
-    for cx, cy in seeds.values():
-        roi = [cx - roi_w * 0.65, cy - roi_h * 0.65,
-               cx + roi_w * 0.65, cy + roi_h * 0.65]
-        local_indices = spatial_index.query_contained(roi, primitives)
-        if len(local_indices) < 3 or len(local_indices) > 80:
-            continue
-        local_desc = [abs_desc[i] for i in local_indices]
-        c_error, rotation = constellation_error(
-            local_desc, template["compound_parts"], roi_w, roi_h, cx, cy
-        )
-        if c_error <= args.constellation_tolerance:
-            constellation_matches.append((cx, cy, c_error, rotation, local_indices))
-    constellation_at = time.perf_counter()
-
-    candidates = []
-    text_filtered_count = 0
-    for cx, cy, c_error, rotation, local_indices in constellation_matches:
-        if text_bboxes and center_overlaps_text(cx, cy, text_bboxes):
-            text_filtered_count += 1
-            continue
-        roi = [cx - roi_w / 2, cy - roi_h / 2, cx + roi_w / 2, cy + roi_h / 2]
-        selected = [primitives[i] for i in local_indices]
-        points = primitive_points_in_roi(selected, roi)
-        mask = points_to_mask(points, roi, grid_size=grid_size)
-        score, mask_rotation = best_rotation_score(template_mask, mask)
-        if score <= args.max_score:
-            candidates.append(Candidate(
-                candidate_id="",
-                center_x_pt=float(cx),
-                center_y_pt=float(cy),
-                constellation_error=float(c_error),
-                score=float(score),
-                rotation=int(mask_rotation),
-                primitive_count=len(selected),
-            ))
-
-    raw_candidates = nms(candidates, min(roi_w, roi_h) * 0.65)
-    ranked = sorted(raw_candidates, key=lambda c: (c.score, c.constellation_error))
-    if args.shortlist_limit > 0:
-        candidates = ranked[:args.shortlist_limit]
-    else:
-        candidates = ranked
-    output_path = Path(args.output)
-    save_outputs(image, candidates, template, output_path, args.dpi)
-    write_interactive_review(candidates, output_path)
-    finished = time.perf_counter()
-
-    diagnostics = {
-        "primitive_count": len(primitives),
-        "seed_count": len(seeds),
-        "constellation_match_count": len(constellation_matches),
-        "raw_candidate_count": len(raw_candidates),
-        "shortlist_count": len(candidates),
-        "parameters": {
-            "constellation_tolerance": args.constellation_tolerance,
-            "max_score": args.max_score,
-            "shortlist_limit": args.shortlist_limit,
-            "exclude_text": args.exclude_text,
-            "text_filtered_count": text_filtered_count,
-        },
-        "timing_seconds": {
-            "extract_and_render": round(extracted_at - started, 3),
-            "seed_generation": round(seeded_at - extracted_at, 3),
-            "constellation_search": round(constellation_at - seeded_at, 3),
-            "mask_scoring_and_output": round(finished - constellation_at, 3),
-            "total": round(finished - started, 3),
-        },
-    }
-    (output_path / "diagnostics.json").write_text(
-        json.dumps(diagnostics, ensure_ascii=False, indent=2), encoding="utf-8"
+    context, cache_hit = get_sheet_context(
+        args.pdf, args.page, args.dpi, use_cache=False
     )
+    try:
+        diagnostics = detect_with_context(
+            context,
+            args.template,
+            args.output,
+            constellation_tolerance=args.constellation_tolerance,
+            max_score=args.max_score,
+            search_x_max=args.search_x_max,
+            seed_step=args.seed_step,
+            anchor_length_tolerance=args.anchor_length_tolerance,
+            anchor_angle_tolerance=args.anchor_angle_tolerance,
+            shortlist_limit=args.shortlist_limit,
+            exclude_text=args.exclude_text,
+            exclude_annotation_layers=args.exclude_annotation_layers,
+            context_cache_hit=cache_hit,
+        )
+    finally:
+        context.close()
 
-    print(f"Primitive count: {len(primitives)}")
-    print(f"Seed count: {len(seeds)}")
-    print(f"Constellation match count: {len(constellation_matches)}")
-    print(f"Raw candidate count: {len(raw_candidates)}")
-    print(f"Shortlist count: {len(candidates)}")
-    print(f"Total time: {finished - started:.2f} seconds")
+    print(f"Primitive count: {diagnostics['primitive_count']}")
+    print(f"Seed count: {diagnostics['seed_count']}")
+    print(f"Constellation match count: {diagnostics['constellation_match_count']}")
+    print(f"Raw candidate count: {diagnostics['raw_candidate_count']}")
+    print(f"Shortlist count: {diagnostics['shortlist_count']}")
+    print(f"Detection time: {diagnostics['timing_seconds']['detection_total']:.2f} seconds")
     print(f"Output: {Path(args.output).resolve()}")
 
 

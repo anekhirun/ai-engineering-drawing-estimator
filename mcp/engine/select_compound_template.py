@@ -113,10 +113,10 @@ def main():
         if max(d["width"], d["height"], d["length"]) >= 0.08
     ][:args.max_parts]
 
-    if len(compound) < 3:
+    if not compound:
         raise RuntimeError(
-            "Template has fewer than 3 useful vector parts. "
-            "Select the symbol again with a slightly larger clean ROI."
+            "Template has no useful vector parts. Select the symbol again "
+            "with a slightly larger clean ROI."
         )
 
     points = primitive_points_in_roi(selected, roi)
@@ -146,6 +146,11 @@ def main():
     print(f"ROI size: {data['width_pt']:.3f} x {data['height_pt']:.3f} pt")
     print(f"Primitive count: {len(selected)}")
     print(f"Compound part count: {len(compound)}")
+    if len(compound) < 3:
+        print(
+            "Warning: simple template has fewer than three compound parts; "
+            "use layer/context filtering and mandatory review."
+        )
     for i, d in enumerate(compound, 1):
         print(
             f"Part {i}: cx={d['cx']:.3f}, cy={d['cy']:.3f}, "

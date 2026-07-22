@@ -115,13 +115,24 @@ class ReviewContractTests(unittest.TestCase):
         self.assertIn("uncertain", result["review_warning"])
 
     def test_version_and_tool_surface(self) -> None:
-        self.assertEqual(VERSION, "0.1.3")
-        self.assertEqual(len(TOOLS), 7)
+        self.assertEqual(VERSION, "0.1.4")
+        self.assertEqual(len(TOOLS), 8)
         confirm_tool = next(tool for tool in TOOLS if tool["name"] == "confirm_symbol_count")
         properties = confirm_tool["inputSchema"]["properties"]
         self.assertIn("rejected_ids", properties)
         self.assertIn("wall_door_sweep_completed", properties)
         self.assertIn("prepare_sheet_audit", {tool["name"] for tool in TOOLS})
+        audit_tool = next(tool for tool in TOOLS if tool["name"] == "prepare_sheet_audit")
+        audit_properties = audit_tool["inputSchema"]["properties"]
+        self.assertIn("excluded_regions", audit_properties)
+        self.assertIn("included_regions", audit_properties)
+        self.assertIn("exclude_annotation_layers", audit_properties)
+        self.assertIn("text_overlap_threshold", audit_properties)
+        self.assertIn("force_reprocess", audit_properties)
+        layer_tool = next(tool for tool in TOOLS if tool["name"] == "analyze_vector_layers")
+        layer_properties = layer_tool["inputSchema"]["properties"]
+        self.assertIn("signature_mapping_path", layer_properties)
+        self.assertEqual(layer_properties["response_detail"]["default"], "compact")
 
 
 if __name__ == "__main__":
