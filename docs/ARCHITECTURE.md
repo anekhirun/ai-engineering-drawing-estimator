@@ -48,7 +48,7 @@ A Discipline Pack defines:
 - counting and review rules;
 - reviewed benchmark coverage.
 
-Electrical and ELV are active in v0.2.0. Planned packs remain visible through
+Electrical and ELV are active in v0.2.x. Planned packs remain visible through
 `get_discipline_catalog` but cannot be passed to `prepare_sheet_audit` until
 implemented.
 
@@ -96,7 +96,7 @@ Legacy candidate files may still be inspected, but cannot produce a final
 
 ## Transport and host adapters
 
-v0.2.0 provides a local stdio MCP transport and a Codex Plugin package.
+v0.2.x provides a local stdio MCP transport and a Codex Plugin package.
 
 Planned adapters include:
 

@@ -24,6 +24,21 @@ class PluginPackageTests(unittest.TestCase):
         self.assertEqual(VERSION, file_version)
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
+        repository_url = "https://github.com/anekhirun/Takeoff-Lens-Plugin"
+        self.assertEqual(manifest["homepage"], repository_url)
+        self.assertEqual(manifest["repository"], repository_url)
+        self.assertEqual(manifest["interface"]["websiteURL"], repository_url)
+
+        installation = (ROOT / "docs" / "INSTALLATION.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"{repository_url}.git", installation)
+        skill_url = (
+            "https://raw.githubusercontent.com/anekhirun/Takeoff-Lens-Plugin/"
+            f"v{file_version}/skills/"
+        )
+        self.assertIn(skill_url, installation)
+        self.assertNotIn("github.com/anekhirun/Takeoff-Lens.git", installation)
 
     def test_mcp_runtime_is_relative_and_desktop_dependency_is_excluded(self) -> None:
         config = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))

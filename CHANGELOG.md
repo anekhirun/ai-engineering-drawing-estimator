@@ -2,6 +2,20 @@
 
 All notable public changes to TakeoffLens are documented here.
 
+## [0.2.1] - 2026-07-22
+
+### Changed
+
+- Updated canonical repository links to `anekhirun/Takeoff-Lens-Plugin`.
+- Added exact Hermes Desktop Skill and MCP installation instructions.
+- Aligned Plugin, MCP server, candidate-review page, and documentation versions.
+
+### Validation
+
+- Full unit-test suite and MCP doctor.
+- Plugin and Skill validators.
+- Release archive content and SHA-256 verification.
+
 ## [0.2.0] - 2026-07-22
 
 ### Added
@@ -51,7 +65,8 @@ All notable public changes to TakeoffLens are documented here.
 - Expanded Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security scope.
 - Added one-call sheet audit preparation and review artifacts.
 
-[0.2.0]: https://github.com/anekhirun/Takeoff-Lens/releases/tag/v0.2.0
-[0.1.5]: https://github.com/anekhirun/Takeoff-Lens/releases/tag/v0.1.5
-[0.1.4]: https://github.com/anekhirun/Takeoff-Lens/releases/tag/v0.1.4
-[0.1.3]: https://github.com/anekhirun/Takeoff-Lens/releases/tag/v0.1.3
+[0.2.1]: https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.2.1
+[0.2.0]: https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.2.0
+[0.1.5]: https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.1.5
+[0.1.4]: https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.1.4
+[0.1.3]: https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.1.3

@@ -2,8 +2,8 @@
 
 ### AI drawing intelligence for reviewed, traceable quantity takeoff
 
-[![Release](https://img.shields.io/github/v/release/anekhirun/Takeoff-Lens?label=release)](https://github.com/anekhirun/Takeoff-Lens/releases/latest)
-[![License](https://img.shields.io/github/license/anekhirun/Takeoff-Lens)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/anekhirun/Takeoff-Lens-Plugin?label=release)](https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/latest)
+[![License](https://img.shields.io/github/license/anekhirun/Takeoff-Lens-Plugin)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](docs/INSTALLATION.md)
 [![MCP](https://img.shields.io/badge/protocol-MCP-6B57FF)](https://modelcontextprotocol.io/)
 
@@ -19,7 +19,7 @@ Protection, Architectural, Structural, and other building systems.
 > TakeoffLens is an assisted-review product. Automatic detections are candidates,
 > not final quantities, until they have been reviewed.
 
-[Download v0.2.0](https://github.com/anekhirun/Takeoff-Lens/releases/latest) ·
+[Download v0.2.1](https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/latest) ·
 [Installation guide](docs/INSTALLATION.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
 [Development](docs/DEVELOPMENT.md) ·
@@ -51,7 +51,7 @@ engineering meaning around that content:
 
 ## Supported disciplines
 
-| Discipline | Systems | v0.2.0 status |
+| Discipline | Systems | v0.2.x status |
 |---|---|---|
 | Electrical | Power, Lighting | Active |
 | ELV | Fire Alarm, Data/Voice, CCTV/Security | Active |
@@ -85,8 +85,8 @@ context only; it is not treated as proof that a symbol exists.
 
 ### Install as a Codex Plugin
 
-1. Download `takeoff-lens-plugin-v0.2.0.zip` from the
-   [latest release](https://github.com/anekhirun/Takeoff-Lens/releases/latest).
+1. Download `takeoff-lens-plugin-v0.2.1.zip` from the
+   [latest release](https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/latest).
 2. Verify the accompanying `.sha256` file.
 3. Extract the archive.
 4. Add the extracted `plugin-marketplace` directory to Codex.
@@ -192,7 +192,7 @@ host-adapter boundaries.
 ## Release history
 
 See [CHANGELOG.md](CHANGELOG.md). The current public release is
-[TakeoffLens v0.2.0](https://github.com/anekhirun/Takeoff-Lens/releases/tag/v0.2.0).
+[TakeoffLens v0.2.1](https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/tag/v0.2.1).
 
 ## License
 

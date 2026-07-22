@@ -1,6 +1,6 @@
 # Installing TakeoffLens
 
-TakeoffLens v0.2.0 is distributed as a local Codex Plugin for Windows. The
+TakeoffLens v0.2.1 is distributed as a local Codex Plugin for Windows. The
 archive contains the Skill, MCP server, runtime launcher, templates, and public
 documentation.
 
@@ -14,14 +14,14 @@ documentation.
 
 ## Option 1: Install the release Plugin
 
-1. Open the [latest release](https://github.com/anekhirun/Takeoff-Lens/releases/latest).
+1. Open the [latest release](https://github.com/anekhirun/Takeoff-Lens-Plugin/releases/latest).
 2. Download:
-   - `takeoff-lens-plugin-v0.2.0.zip`
-   - `takeoff-lens-plugin-v0.2.0.zip.sha256`
+   - `takeoff-lens-plugin-v0.2.1.zip`
+   - `takeoff-lens-plugin-v0.2.1.zip.sha256`
 3. Verify the ZIP in PowerShell:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\takeoff-lens-plugin-v0.2.0.zip
+Get-FileHash -Algorithm SHA256 .\takeoff-lens-plugin-v0.2.1.zip
 ```
 
 4. Extract the ZIP. It contains this structure:
@@ -63,8 +63,8 @@ migration, but new installations should use `TAKEOFFLENS_PYTHON`.
 Clone the repository and run the installer:
 
 ```powershell
-git clone https://github.com/anekhirun/Takeoff-Lens.git
-Set-Location .\Takeoff-Lens
+git clone https://github.com/anekhirun/Takeoff-Lens-Plugin.git
+Set-Location .\Takeoff-Lens-Plugin
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install.ps1
 ```
@@ -82,7 +82,7 @@ TakeoffLens currently exposes a local stdio MCP server. After installing
 
 ```text
 command: C:\path\to\python.exe
-args:    C:\path\to\Takeoff-Lens\mcp\server.py
+args:    C:\path\to\Takeoff-Lens-Plugin\mcp\server.py
 ```
 
 Example configuration shape for clients that use YAML:
@@ -92,11 +92,46 @@ mcp_servers:
   takeoff_lens:
     command: "C:\\path\\to\\python.exe"
     args:
-      - "C:\\path\\to\\Takeoff-Lens\\mcp\\server.py"
+      - "C:\\path\\to\\Takeoff-Lens-Plugin\\mcp\\server.py"
 ```
 
-Hermes and other MCP clients may use this stdio shape, but host-specific
-integration is not yet part of the certified v0.2.0 release matrix.
+Other MCP clients may use the same local stdio shape.
+
+## Hermes Desktop setup
+
+Hermes Desktop requires the Skill and MCP registration separately. In a new
+Hermes session, install the versioned Skill:
+
+```text
+/skills install https://raw.githubusercontent.com/anekhirun/Takeoff-Lens-Plugin/v0.2.1/skills/count-engineering-drawing-symbols/SKILL.md --now
+```
+
+Then open **Capabilities > MCP > Servers** and add `takeoff-lens` to the
+existing `mcp.json`. Keep any servers already present:
+
+```json
+{
+  "mcpServers": {
+    "takeoff-lens": {
+      "command": "C:\\path\\to\\Takeoff-Lens-Plugin\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\path\\to\\Takeoff-Lens-Plugin\\mcp\\server.py"
+      ]
+    }
+  }
+}
+```
+
+Click **Save**, then **Reload MCP**. The server should report ten enabled tools.
+Start a new session and ask:
+
+```text
+Use the count-engineering-drawing-symbols skill and TakeoffLens.
+Show the active and planned discipline catalog.
+```
+
+The Hermes **Settings > Plugins** pane is for Desktop UI extensions. It does
+not install this Agent Skill or MCP server automatically.
 
 ## Upgrade from the legacy Plugin
 
@@ -106,7 +141,7 @@ The legacy Plugin IDs are:
 - `engineering-drawing-estimator`
 
 Install and test `takeoff-lens` first. Confirm that `mcp/doctor.py` reports
-TakeoffLens v0.2.0 and ten tools, then uninstall the legacy Plugin through the
+TakeoffLens v0.2.1 and ten tools, then uninstall the legacy Plugin through the
 Codex Plugins UI.
 
 For manual configurations, keep only this MCP registration:
@@ -130,7 +165,7 @@ From a source checkout or extracted Plugin root with a compatible environment:
 Expected identity:
 
 ```text
-version: 0.2.0
+version: 0.2.1
 server_name: takeoff-lens
 tool count: 10
 ```
@@ -162,5 +197,5 @@ binary packages. Later launches reuse the dependency hash.
 
 ### Raster drawing returns no automatic candidates
 
-This is expected in v0.2.0. Render the page at high resolution and use visual
+This is expected in v0.2.x. Render the page at high resolution and use visual
 review. The bundled matcher is designed primarily for vector and hybrid PDFs.

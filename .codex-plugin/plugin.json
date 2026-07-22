@@ -1,14 +1,14 @@
 {
   "name": "takeoff-lens",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local AI drawing intelligence for reviewed, traceable quantity takeoff.",
   "author": {
     "name": "anekhirun",
     "email": "anekhirun01@gmail.com",
     "url": "https://github.com/anekhirun"
   },
-  "homepage": "https://github.com/anekhirun/Takeoff-Lens",
-  "repository": "https://github.com/anekhirun/Takeoff-Lens",
+  "homepage": "https://github.com/anekhirun/Takeoff-Lens-Plugin",
+  "repository": "https://github.com/anekhirun/Takeoff-Lens-Plugin",
   "license": "MIT",
   "keywords": ["engineering", "drawing", "quantity-takeoff", "pdf", "mep", "mcp"],
   "skills": "./skills/",
@@ -20,7 +20,7 @@
     "developerName": "anekhirun",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
-    "websiteURL": "https://github.com/anekhirun/Takeoff-Lens",
+    "websiteURL": "https://github.com/anekhirun/Takeoff-Lens-Plugin",
     "defaultPrompt": [
       "Audit this engineering drawing with traceable evidence.",
       "Count supported systems by floor and create markup.",
