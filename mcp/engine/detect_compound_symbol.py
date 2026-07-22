@@ -246,7 +246,7 @@ def save_outputs(image, candidates, template, output, dpi, suppressed=None):
     repeat(auto-fill,minmax(310px,1fr));gap:14px}}article{{display:flex;gap:12px;
     border:1px solid #aaa;padding:10px;border-radius:8px}}img{{width:160px;height:
     160px;object-fit:contain;border:1px solid #ddd}}</style></head><body>
-    <h1>TakeoffLens v0.2.0 Candidate Review</h1>
+    <h1>TakeoffLens v0.2.1 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <main>{cards}</main></body></html>"""
     (output / "review.html").write_text(review, encoding="utf-8")
@@ -274,7 +274,7 @@ def write_interactive_review(candidates, output):
     article.uncertain{{border-color:#d28b00;background:#fff9e8}}
     .toolbar{{position:sticky;top:0;background:white;padding:10px 0;z-index:2}}
     </style></head><body>
-    <h1>TakeoffLens v0.2.0 Candidate Review</h1>
+    <h1>TakeoffLens v0.2.1 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <div class="toolbar"><b id="counts"></b>
     <button onclick="exportDecisions()">Export decisions.json</button></div>

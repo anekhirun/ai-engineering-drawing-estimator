@@ -149,7 +149,7 @@ class ReviewContractTests(unittest.TestCase):
             confirm_symbol_count(args)
 
     def test_version_and_tool_surface(self) -> None:
-        self.assertEqual(VERSION, "0.2.0")
+        self.assertEqual(VERSION, "0.2.1")
         self.assertEqual(len(TOOLS), 10)
         confirm_tool = next(tool for tool in TOOLS if tool["name"] == "confirm_symbol_count")
         properties = confirm_tool["inputSchema"]["properties"]

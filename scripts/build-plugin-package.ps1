@@ -26,7 +26,7 @@ if (Test-Path -LiteralPath $OutputRoot) {
 }
 New-Item -ItemType Directory -Force -Path $PluginRoot, $MarketplaceDirectory | Out-Null
 
-foreach ($Directory in @(".codex-plugin", "mcp", "skills")) {
+foreach ($Directory in @(".codex-plugin", "docs", "mcp", "skills")) {
     $SourceDirectory = Join-Path $Root $Directory
     $DestinationDirectory = Join-Path $PluginRoot $Directory
     New-Item -ItemType Directory -Force -Path $DestinationDirectory | Out-Null
@@ -41,6 +41,8 @@ foreach ($File in @(
     "requirements-mcp.txt",
     "LICENSE",
     "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
     "VERSION"
 )) {
     Copy-Item -LiteralPath (Join-Path $Root $File) -Destination $PluginRoot -Force
