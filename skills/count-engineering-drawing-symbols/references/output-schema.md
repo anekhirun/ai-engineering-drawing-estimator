@@ -12,9 +12,20 @@ Every final detection must contain:
   "center_y_pt": 284.1,
   "detection_method": "pdf_vector_compound_match",
   "review_status": "confirmed",
-  "geometry_score": 0.12
+  "geometry_score": 0.12,
+  "final_score": 0.11,
+  "score_version": "native_v2"
 }
 ```
+
+Candidate diagnostics should also record the native `context_id`, Page Profiler
+v2 result, template hash and validation, cache status, excluded regions, filter
+counts, and per-stage timings. These fields improve reproducibility but never
+replace visual review.
+
+Routine MCP calls should return the compact summary and artifact paths. Full
+candidate coordinates and diagnostics belong in those artifacts so they remain
+auditable without repeatedly consuming the agent context.
 
 Required report artifacts:
 

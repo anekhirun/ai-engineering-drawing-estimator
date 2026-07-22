@@ -20,8 +20,8 @@ def main() -> None:
     })
     tools = handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     tool_names = [item["name"] for item in tools["result"]["tools"]]
-    if len(tool_names) != 7:
-        raise RuntimeError(f"Expected 7 MCP tools, found {len(tool_names)}")
+    if len(tool_names) != 8:
+        raise RuntimeError(f"Expected 8 MCP tools, found {len(tool_names)}")
     report = {
         "status": "ok",
         "version": VERSION,
