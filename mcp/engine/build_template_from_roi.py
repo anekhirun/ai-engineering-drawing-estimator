@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--roi", type=float, nargs=4, required=True, metavar=("X1", "Y1", "X2", "Y2"))
     parser.add_argument("--grid-size", type=int, default=96)
     parser.add_argument("--max-parts", type=int, default=10)
+    parser.add_argument("--symbol-id")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
@@ -55,6 +56,9 @@ def main() -> None:
     preview = output.with_name(output.stem + "_preview.png")
     cv2.imwrite(str(preview), mask)
     data = {
+        "template_schema_version": "2",
+        "symbol_id": args.symbol_id,
+        "template_type": "project" if args.symbol_id else "legacy_unscoped",
         "source_pdf": args.pdf,
         "source_page": args.page,
         "roi_pdf_points": roi,

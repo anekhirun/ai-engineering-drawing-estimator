@@ -161,7 +161,7 @@ class DrawingView(QGraphicsView):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(f"AI Engineering Drawing Estimator {VERSION}")
+        self.setWindowTitle(f"TakeoffLens {VERSION}")
         self.resize(1440, 900)
         self.thread_pool = QThreadPool.globalInstance()
         self.pdf_path: Path | None = None
@@ -583,8 +583,8 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("AI Engineering Drawing Estimator")
-    app.setOrganizationName("AI Engineering Drawing Estimator")
+    app.setApplicationName("TakeoffLens")
+    app.setOrganizationName("TakeoffLens")
     app.setFont(QFont("Leelawadee UI", 10))
     window = MainWindow()
     window.show()

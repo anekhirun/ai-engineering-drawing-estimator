@@ -1,1 +1,1 @@
-"""Windows desktop interface for AI Engineering Drawing Estimator."""
+"""Optional Windows desktop interface for TakeoffLens."""

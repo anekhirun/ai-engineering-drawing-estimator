@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "engineering-drawing-estimator": {
+    "takeoff-lens": {
       "command": "powershell",
       "args": [
         "-NoProfile",

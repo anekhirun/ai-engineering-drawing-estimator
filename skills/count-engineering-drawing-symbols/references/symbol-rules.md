@@ -23,12 +23,15 @@
 
 - Use the current project legend as the authoritative mapping for control panels,
   detectors, bells, manual stations, strobes, and end-of-line accessories.
-- Build a project-specific vector template for each Fire Alarm class. v0.1.5 does
+- Build a project-specific vector template for each Fire Alarm class. v0.2.0 does
   not provide universal Fire Alarm starter geometry.
 - Letters such as `S`, `F`, `B`, and `WP` may appear in notes or in compound
   device groups. Treat every match as a review candidate and confirm its context.
 - Keep detector temperature ratings separate. Do not infer a 135 F device when
   only a 200 F symbol is visible, or vice versa.
+- Keep indoor and explicit `WP` variants separate for bells, manual stations,
+  and strobe lights. Weatherproof suffixes affect BOQ classification and must
+  not be merged into the indoor subtotal.
 - Count end-of-line as an accessory subtotal unless the requested BOQ explicitly
   includes it in the primary equipment total.
 
@@ -54,9 +57,9 @@
 - Count emergency-lighting accessories separately when the BOQ requires a normal/emergency split.
 - Keep `LED 2x10W/2x20W recessed diffuser` separate from `LED 10W/20W surface-mounted weatherproof IP65`; their plan geometry must be mapped through the project legend rather than inferred from orientation alone.
 
-## v0.1.5 systems
+## v0.2.0 systems
 
-Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security are included in v0.1.5.
+Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security are included in v0.2.0.
 
 ## Context priority
 

@@ -28,7 +28,7 @@ Copy-Item (Join-Path $SkillSource "*") $SkillTarget -Recurse -Force
 $EscapedPython = $Python.Replace("\", "\\")
 $EscapedServer = (Join-Path $Root "mcp\server.py").Replace("\", "\\")
 $Snippet = @"
-[mcp_servers.engineering-drawing-estimator]
+[mcp_servers.takeoff-lens]
 command = "$EscapedPython"
 args = ["$EscapedServer"]
 startup_timeout_sec = 30
@@ -40,5 +40,5 @@ Set-Content -Path $SnippetPath -Value $Snippet -Encoding UTF8
 
 Write-Host "Installed skill: $SkillTarget"
 Write-Host "MCP config snippet: $SnippetPath"
-Write-Host "Optional experimental Windows Desktop App: .\start-desktop.ps1"
+Write-Host "Optional experimental TakeoffLens Desktop App: .\start-desktop.ps1"
 Write-Host "Add the snippet to $HOME\.codex\config.toml, then restart the AI Agent."

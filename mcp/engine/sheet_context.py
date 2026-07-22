@@ -16,7 +16,7 @@ from vector_core import extract_primitives_from_drawings
 
 
 PROFILE_VERSION = "2"
-CONTEXT_VERSION = "2"
+CONTEXT_VERSION = "3"
 CONTEXT_CACHE_SIZE = 2
 MAX_CACHED_IMAGE_BYTES = 256 * 1024 * 1024
 
@@ -79,6 +79,18 @@ def text_boxes(page: fitz.Page) -> list[tuple[float, float, float, float]]:
         if len(word) >= 4:
             boxes.append(tuple(map(float, word[:4])))
     return boxes
+
+
+def text_words(page: fitz.Page) -> list[dict[str, Any]]:
+    words = []
+    for item in page.get_text("words"):
+        if len(item) < 5:
+            continue
+        words.append({
+            "bbox": tuple(map(float, item[:4])),
+            "text": str(item[4]),
+        })
+    return words
 
 
 def _image_area_ratio(page: fitz.Page) -> float:
@@ -191,6 +203,7 @@ class SheetContext:
     descriptors: list[dict[str, float]]
     spatial_index: PrimitiveSpatialIndex
     text_bboxes: list[tuple[float, float, float, float]]
+    text_words: list[dict[str, Any]]
     image: np.ndarray
     preparation_seconds: float
 
@@ -254,6 +267,7 @@ def get_sheet_context(
         descriptors=descriptors,
         spatial_index=PrimitiveSpatialIndex(descriptors),
         text_bboxes=text_boxes(page),
+        text_words=text_words(page),
         image=(
             render_page_image(page, dpi)
             if require_image

@@ -15,7 +15,7 @@ if (-not $OutputRoot.StartsWith($ReleaseRoot, [System.StringComparison]::Ordinal
     throw "OutputRoot must stay inside $ReleaseRoot"
 }
 
-$PluginName = "engineering-drawing-estimator"
+$PluginName = "takeoff-lens"
 $PluginRoot = Join-Path $OutputRoot "plugins\$PluginName"
 $MarketplaceDirectory = Join-Path $OutputRoot ".agents\plugins"
 $MarketplacePath = Join-Path $MarketplaceDirectory "marketplace.json"
@@ -69,7 +69,7 @@ foreach ($RequiredPath in @(
 $Marketplace = [ordered]@{
     name = $PluginName
     interface = [ordered]@{
-        displayName = "AI Engineering Drawing Estimator"
+        displayName = "TakeoffLens"
     }
     plugins = @(
         [ordered]@{
@@ -86,8 +86,9 @@ $Marketplace = [ordered]@{
         }
     )
 }
-$Marketplace | ConvertTo-Json -Depth 8 |
-    Set-Content -LiteralPath $MarketplacePath -Encoding UTF8
+$MarketplaceJson = $Marketplace | ConvertTo-Json -Depth 8
+$Utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($MarketplacePath, $MarketplaceJson, $Utf8WithoutBom)
 
 if (Test-Path -LiteralPath $ZipPath) {
     Remove-Item -LiteralPath $ZipPath -Force

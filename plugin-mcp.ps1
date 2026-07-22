@@ -21,12 +21,20 @@ function Invoke-SetupCommand {
 if ($env:PLUGIN_DATA) {
     $RuntimeRoot = $env:PLUGIN_DATA
 } elseif ($env:LOCALAPPDATA) {
-    $RuntimeRoot = Join-Path $env:LOCALAPPDATA "EngineeringDrawingEstimator\plugin-data"
+    $RuntimeRoot = Join-Path $env:LOCALAPPDATA "TakeoffLens\plugin-data"
 } else {
-    $RuntimeRoot = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "EngineeringDrawingEstimator\plugin-data"
+    $RuntimeRoot = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "TakeoffLens\plugin-data"
 }
 
-$ManagedRuntime = -not $env:ENGINEERING_DRAWING_ESTIMATOR_PYTHON
+$ConfiguredPython = if ($env:TAKEOFFLENS_PYTHON) {
+    $env:TAKEOFFLENS_PYTHON
+} elseif ($env:ENGINEERING_DRAWING_ESTIMATOR_PYTHON) {
+    # Compatibility alias for installations created before TakeoffLens v0.2.0.
+    $env:ENGINEERING_DRAWING_ESTIMATOR_PYTHON
+} else {
+    ""
+}
+$ManagedRuntime = -not $ConfiguredPython
 if ($ManagedRuntime) {
     $Venv = Join-Path $RuntimeRoot "venv"
     $Python = Join-Path $Venv "Scripts\python.exe"
@@ -65,9 +73,9 @@ if ($ManagedRuntime) {
         Set-Content -LiteralPath $DependencyMarker -Value $RequirementsHash -Encoding ASCII
     }
 } else {
-    $Python = [System.IO.Path]::GetFullPath($env:ENGINEERING_DRAWING_ESTIMATOR_PYTHON)
+    $Python = [System.IO.Path]::GetFullPath($ConfiguredPython)
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
-        throw "ENGINEERING_DRAWING_ESTIMATOR_PYTHON does not point to a Python executable."
+        throw "TAKEOFFLENS_PYTHON does not point to a Python executable."
     }
 }
 

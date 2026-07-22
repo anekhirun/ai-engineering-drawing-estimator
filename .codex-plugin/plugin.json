@@ -1,7 +1,7 @@
 {
-  "name": "engineering-drawing-estimator",
-  "version": "0.1.5",
-  "description": "Local assisted review for electrical and communication drawing quantities.",
+  "name": "takeoff-lens",
+  "version": "0.2.0",
+  "description": "Local AI drawing intelligence for reviewed, traceable quantity takeoff.",
   "author": {
     "name": "anekhirun",
     "email": "anekhirun01@gmail.com",
@@ -10,21 +10,21 @@
   "homepage": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
   "repository": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
   "license": "MIT",
-  "keywords": ["engineering", "drawing", "quantity-takeoff", "pdf", "mcp"],
+  "keywords": ["engineering", "drawing", "quantity-takeoff", "pdf", "mep", "mcp"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "AI Engineering Drawing Estimator",
-    "shortDescription": "Review electrical drawing quantities locally.",
-    "longDescription": "Bundle the reviewed drawing-counting Skill and local native PDF MCP server in one versioned package.",
+    "displayName": "TakeoffLens",
+    "shortDescription": "Turn drawings into reviewed, traceable quantities.",
+    "longDescription": "Read engineering drawings, detect discipline-specific symbols, review every candidate, and export traceable quantity evidence. Electrical and ELV workflows are available first, with a shared core designed for additional building systems.",
     "developerName": "anekhirun",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
     "websiteURL": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
     "defaultPrompt": [
-      "Audit this electrical PDF and review every candidate.",
-      "Count this drawing by system and floor with markup.",
-      "Inspect this vector PDF using confirmed project mappings."
+      "Audit this engineering drawing with traceable evidence.",
+      "Count supported systems by floor and create markup.",
+      "Show supported and planned TakeoffLens disciplines."
     ],
     "brandColor": "#174A64"
   }
