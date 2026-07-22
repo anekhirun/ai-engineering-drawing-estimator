@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import math
+import re
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -39,6 +40,8 @@ class Candidate:
     excluded_region_penalty: float = 0.0
     source_layers: list[str] | None = None
     filter_reasons: list[str] | None = None
+    nearby_text: str = ""
+    variant_context: str = "ANY"
     crop_file: str = ""
 
 
@@ -130,7 +133,17 @@ def constellation_error(local_desc, parts, roi_w, roi_h, cx, cy):
 
 def nms(candidates, distance):
     kept = []
-    for c in sorted(candidates, key=lambda x: (x.score, x.constellation_error)):
+    # A candidate carrying strong filter evidence must never suppress a clean
+    # overlapping candidate. Within each evidence class, preserve the legacy
+    # geometry ordering until benchmark data justifies ranking by final_score.
+    for c in sorted(
+        candidates,
+        key=lambda x: (
+            bool(x.filter_reasons),
+            x.score,
+            x.constellation_error,
+        ),
+    ):
         if all(
             math.hypot(c.center_x_pt - k.center_x_pt, c.center_y_pt - k.center_y_pt)
             >= distance
@@ -233,7 +246,7 @@ def save_outputs(image, candidates, template, output, dpi, suppressed=None):
     repeat(auto-fill,minmax(310px,1fr));gap:14px}}article{{display:flex;gap:12px;
     border:1px solid #aaa;padding:10px;border-radius:8px}}img{{width:160px;height:
     160px;object-fit:contain;border:1px solid #ddd}}</style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.5 Candidate Review</h1>
+    <h1>TakeoffLens v0.2.0 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <main>{cards}</main></body></html>"""
     (output / "review.html").write_text(review, encoding="utf-8")
@@ -261,12 +274,12 @@ def write_interactive_review(candidates, output):
     article.uncertain{{border-color:#d28b00;background:#fff9e8}}
     .toolbar{{position:sticky;top:0;background:white;padding:10px 0;z-index:2}}
     </style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.5 Candidate Review</h1>
+    <h1>TakeoffLens v0.2.0 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <div class="toolbar"><b id="counts"></b>
     <button onclick="exportDecisions()">Export decisions.json</button></div>
     <main>{cards}</main><script>
-    const storageKey = 'v014-decisions-' + location.pathname;
+    const storageKey = 'v020-decisions-' + location.pathname;
     const decisions = JSON.parse(localStorage.getItem(storageKey) || '{{}}');
     function paint(id) {{
       const card = document.getElementById('card-' + id);
@@ -307,6 +320,10 @@ def validate_template(template: dict) -> dict:
         raise ValueError("Template grid_size must be at least 16")
     part_count = len(template["compound_parts"])
     warnings = []
+    if not template.get("symbol_id"):
+        warnings.append(
+            "Template has no symbol_id provenance; rebuild it with v0.2.0 when practical."
+        )
     if part_count < 3:
         warnings.append("Template has fewer than three compound parts and may be ambiguous.")
     return {
@@ -365,6 +382,30 @@ def text_overlap_ratio(roi, boxes, padding=0.4) -> float:
         )
         overlap += _intersection_area((x1, y1, x2, y2), expanded)
     return min(overlap / area, 1.0)
+
+
+def nearby_text_for_candidate(cx, cy, roi_w, roi_h, words) -> str:
+    context_roi = (
+        cx - roi_w * 2.5,
+        cy - roi_h * 2.5,
+        cx + roi_w * 2.5,
+        cy + roi_h * 2.5,
+    )
+    selected = []
+    for item in words:
+        x1, y1, x2, y2 = item["bbox"]
+        word_cx = (x1 + x2) / 2
+        word_cy = (y1 + y2) / 2
+        if (
+            context_roi[0] <= word_cx <= context_roi[2]
+            and context_roi[1] <= word_cy <= context_roi[3]
+        ):
+            selected.append(str(item["text"]))
+    return " ".join(selected)[:240]
+
+
+def has_wp_context(value: str) -> bool:
+    return bool(re.search(r"(?:^|[^A-Z0-9])WP(?:$|[^A-Z0-9])", value.upper()))
 
 
 def _layer_has_token(layer: str, tokens) -> bool:
@@ -433,6 +474,7 @@ def detect_with_context(
     excluded_regions=None,
     included_regions=None,
     preferred_layer_tokens=None,
+    variant_context: str = "ANY",
     context_cache_hit: bool = False,
 ) -> dict:
     started = time.perf_counter()
@@ -455,6 +497,10 @@ def detect_with_context(
     abs_desc = context.descriptors
     spatial_index = context.spatial_index
     text_bboxes = context.text_bboxes if exclude_text else []
+    sheet_text_words = context.text_words
+    variant_context = str(variant_context or "ANY").upper()
+    if variant_context not in {"ANY", "WP", "NON_WP"}:
+        raise ValueError("variant_context must be ANY, WP, or NON_WP")
     preferred_layer_tokens = tuple(preferred_layer_tokens or ())
     page_has_preferred_layers = bool(preferred_layer_tokens) and any(
         _layer_has_token(getattr(item, "layer", ""), preferred_layer_tokens)
@@ -520,6 +566,10 @@ def detect_with_context(
         layer_evidence = layer_filter_evidence(
             selected, roi, preferred_layer_tokens or None
         )
+        nearby_text = nearby_text_for_candidate(
+            cx, cy, roi_w, roi_h, sheet_text_words
+        )
+        wp_context = has_wp_context(nearby_text)
         points = primitive_points_in_roi(selected, roi)
         mask = points_to_mask(points, roi, grid_size=grid_size)
         geometry_score, mask_rotation = best_rotation_score(template_mask, mask)
@@ -536,6 +586,10 @@ def detect_with_context(
                 and layer_evidence["symbol_primitive_count"] == 0
             ):
                 filter_reasons.append("outside_preferred_symbol_layers")
+            if variant_context == "WP" and not wp_context:
+                filter_reasons.append("missing_required_wp_context")
+            elif variant_context == "NON_WP" and wp_context:
+                filter_reasons.append("weatherproof_variant_context")
             candidate = Candidate(
                 candidate_id="",
                 center_x_pt=float(cx),
@@ -552,6 +606,8 @@ def detect_with_context(
                 ),
                 source_layers=layer_evidence["source_layers"],
                 filter_reasons=filter_reasons,
+                nearby_text=nearby_text,
+                variant_context=variant_context,
             )
             scored_candidates.append(candidate)
 
@@ -578,20 +634,37 @@ def detect_with_context(
     )
     # Preserve the v0.1.3 shortlist order so optimization cannot silently hide a
     # previously visible high-recall candidate. final_score is diagnostic in
-    # v0.1.5 until it has drawing-backed regression evidence.
+    # v0.2.0 until it has drawing-backed regression evidence.
     ranked = sorted(raw_candidates, key=lambda item: (item.score, item.constellation_error))
     candidates = ranked[:shortlist_limit] if shortlist_limit > 0 else ranked
+    ranked_out_candidates = ranked[len(candidates):]
     output_path = Path(output).resolve()
     save_outputs(
         context.image, candidates, template, output_path, context.dpi,
         suppressed_candidates,
     )
+    for index, candidate in enumerate(ranked_out_candidates, 1):
+        candidate.candidate_id = f"R{index:03d}"
+    candidate_pool = [
+        {**asdict(candidate), "candidate_status": status}
+        for status, group in (
+            ("shortlisted", candidates),
+            ("filtered", suppressed_candidates),
+            ("ranked_out", ranked_out_candidates),
+        )
+        for candidate in group
+    ]
+    candidate_pool_path = output_path / "candidate_pool.json"
+    candidate_pool_path.write_text(
+        json.dumps(candidate_pool, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     write_interactive_review(candidates, output_path)
     finished = time.perf_counter()
 
     diagnostics = {
-        "pipeline_version": "native_v2",
-        "candidate_filter_version": "2",
+        "pipeline_version": "native_v3",
+        "candidate_filter_version": "3",
         "page_has_preferred_layers": page_has_preferred_layers,
         "preferred_layer_tokens": list(preferred_layer_tokens),
         "context_id": context.context_id,
@@ -605,6 +678,8 @@ def detect_with_context(
         "pre_filter_candidate_count": len(pre_filter_candidates),
         "raw_candidate_count": len(raw_candidates),
         "shortlist_count": len(candidates),
+        "ranked_out_count": len(ranked_out_candidates),
+        "candidate_pool_json": str(candidate_pool_path),
         "parameters": {
             "constellation_tolerance": constellation_tolerance,
             "max_score": max_score,
@@ -618,6 +693,7 @@ def detect_with_context(
             "text_filtered_count": text_filtered_count,
             "annotation_layer_filtered_count": annotation_layer_filtered_count,
             "preferred_layer_filtered_count": preferred_layer_filtered_count,
+            "variant_context": variant_context,
             "excluded_region_filtered_count": excluded_region_filtered_count,
             "included_region_filtered_count": included_region_filtered_count,
             "suppressed_candidate_count": len(suppressed_candidates),

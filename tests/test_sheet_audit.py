@@ -13,8 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "mcp"))
 
 from server import (  # noqa: E402
+    DISCIPLINES,
     SYSTEMS,
     build_symbol_template,
+    detect_symbol_candidates,
+    get_discipline_catalog,
     get_symbol_rules,
     inspect_drawing,
     prepare_sheet_audit,
@@ -39,7 +42,7 @@ class SheetAuditTests(unittest.TestCase):
         clear_context_cache()
         self.temp.cleanup()
 
-    def test_v014_scope_contains_five_project_systems(self) -> None:
+    def test_v020_scope_contains_five_project_systems(self) -> None:
         self.assertEqual(
             set(SYSTEMS),
             {"POWER", "FIRE_ALARM", "DATA_VOICE", "CCTV_SECURITY", "LIGHTING"},
@@ -63,12 +66,34 @@ class SheetAuditTests(unittest.TestCase):
             "DUMMY_CCTV_CAMERA",
             get_symbol_rules({"system_id": "CCTV_SECURITY"})["symbol_ids"],
         )
+        fire_alarm = get_symbol_rules(
+            {"system_id": "FIRE_ALARM", "response_detail": "full"}
+        )
+        self.assertIn(
+            "FIRE_ALARM_MANUAL_STATION_WP", fire_alarm["symbol_ids"]
+        )
+        self.assertIn(
+            "SWT-E-FA",
+            fire_alarm["symbols"]["FIRE_ALARM_MANUAL_STATION"]["layer_tokens"],
+        )
         lighting = get_symbol_rules({"system_id": "LIGHTING"})["symbol_ids"]
         self.assertIn("ONE_WAY_LIGHTING_SWITCH", lighting)
         self.assertIn("LIGHTING_SWITCH_BANK", lighting)
         self.assertIn("SELF_CONTAINED_EMERGENCY_LIGHT_2X9W", lighting)
         self.assertIn("LED_RECESSED_DIFFUSER_2X10W_2X20W", lighting)
         self.assertIn("LED_SURFACE_WEATHERPROOF_IP65_10W_20W", lighting)
+
+    def test_discipline_catalog_separates_active_scope_from_roadmap(self) -> None:
+        catalog = get_discipline_catalog({})
+
+        self.assertEqual(catalog["product"], "TakeoffLens")
+        self.assertEqual(set(catalog["active_discipline_ids"]), {"ELECTRICAL", "ELV"})
+        self.assertIn("MECHANICAL", catalog["planned_discipline_ids"])
+        self.assertEqual(DISCIPLINES["PLUMBING"]["status"], "planned")
+        self.assertEqual(
+            get_discipline_catalog({"discipline_id": "ELECTRICAL"})["system_ids"],
+            ["POWER", "LIGHTING"],
+        )
 
     def test_symbol_rules_are_compact_by_default(self) -> None:
         compact = get_symbol_rules({"system_id": "LIGHTING"})
@@ -105,12 +130,32 @@ class SheetAuditTests(unittest.TestCase):
                 "pdf_path": str(pdf),
                 "page": 1,
                 "roi_pdf_points": [40, 40, 60, 110],
+                "symbol_id": "DUPLEX_SOCKET_OUTLET",
                 "output_path": str(output),
             }
         )
         self.assertGreaterEqual(result["compound_part_count"], 1)
         self.assertLess(result["compound_part_count"], 3)
         self.assertTrue(output.is_file())
+        template = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(template["template_schema_version"], "2")
+        self.assertEqual(template["symbol_id"], "DUPLEX_SOCKET_OUTLET")
+
+    def test_template_symbol_mismatch_stops_detection(self) -> None:
+        template = self.root / "wrong-symbol.json"
+        template.write_text(
+            json.dumps({"symbol_id": "DATA_OUTLET"}), encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ValueError, "not DUPLEX_SOCKET_OUTLET"):
+            detect_symbol_candidates(
+                {
+                    "pdf_path": str(self.pdf),
+                    "symbol_id": "DUPLEX_SOCKET_OUTLET",
+                    "template_path": str(template),
+                    "output_dir": str(self.root / "mismatch"),
+                }
+            )
 
     def test_fire_alarm_sheet_is_prepared_in_one_call(self) -> None:
         output = self.root / "audit"
@@ -126,7 +171,7 @@ class SheetAuditTests(unittest.TestCase):
         )
 
         self.assertEqual(result["system_id"], "FIRE_ALARM")
-        self.assertEqual(len(result["template_required"]), 8)
+        self.assertEqual(len(result["template_required"]), 11)
         self.assertTrue(result["clarification_required"])
         self.assertTrue(Path(result["overview"]["output_path"]).is_file())
         manifest = json.loads(
@@ -168,10 +213,18 @@ class SheetAuditTests(unittest.TestCase):
         self.assertEqual(first["context_id"], second["context_id"])
         for run in first["runs"]:
             self.assertEqual(run["diagnostics"]["context_id"], first["context_id"])
-            self.assertEqual(run["diagnostics"]["pipeline_version"], "native_v2")
-            self.assertEqual(run["diagnostics"]["candidate_filter_version"], "2")
+            self.assertEqual(run["diagnostics"]["pipeline_version"], "native_v3")
+            self.assertEqual(run["diagnostics"]["candidate_filter_version"], "3")
             self.assertIn("template_validation", run["diagnostics"])
             self.assertTrue(Path(run["filtered_candidates_json"]).is_file())
+            self.assertTrue(Path(run["candidate_pool_json"]).is_file())
+            detection_manifest = json.loads(
+                Path(run["detection_manifest_json"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(detection_manifest["schema_version"], "1")
+            self.assertEqual(detection_manifest["symbol_id"], run["symbol_id"])
+            self.assertEqual(len(detection_manifest["pdf_sha256"]), 64)
+            self.assertEqual(len(detection_manifest["candidates_sha256"]), 64)
 
 
 if __name__ == "__main__":

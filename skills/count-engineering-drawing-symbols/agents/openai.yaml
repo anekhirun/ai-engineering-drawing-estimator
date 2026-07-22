@@ -1,10 +1,10 @@
 interface:
-  display_name: "AI Engineering Drawing Estimator"
-  short_description: "Review MEP electrical, lighting, and security quantities"
+  display_name: "TakeoffLens Drawing Audit"
+  short_description: "Review supported drawing quantities with traceable evidence"
   default_prompt: "Use $count-engineering-drawing-symbols to prepare and review a Power, Lighting, Fire Alarm, Data/Voice, or CCTV/Security symbol audit with compact MCP responses. Prefer confirmed vector-layer mappings on clean vector sheets, create markup, and ask me about every uncertain point before finalizing."
 dependencies:
   tools:
     - type: "mcp"
-      value: "engineering-drawing-estimator"
+      value: "takeoff-lens"
       description: "Local PDF vector extraction, candidate detection, review, and markup tools"
       transport: "stdio"

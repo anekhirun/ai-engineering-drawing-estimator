@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -9,6 +10,14 @@ from pathlib import Path
 import cv2
 import fitz
 import numpy as np
+
+
+def sha256_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def render_page(page: fitz.Page, dpi: int) -> np.ndarray:
@@ -28,6 +37,7 @@ def main() -> None:
     parser.add_argument("pdf")
     parser.add_argument("template")
     parser.add_argument("candidates_json")
+    parser.add_argument("--detection-manifest")
     parser.add_argument("--accept", nargs="*", default=[])
     parser.add_argument("--reject", nargs="*", default=[])
     parser.add_argument("--uncertain", nargs="*", default=[])
@@ -50,6 +60,28 @@ def main() -> None:
 
     template = json.loads(Path(args.template).read_text(encoding="utf-8"))
     candidates = json.loads(Path(args.candidates_json).read_text(encoding="utf-8"))
+    provenance_verified = False
+    if args.detection_manifest:
+        manifest_path = Path(args.detection_manifest).resolve()
+        provenance_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        expected = {
+            "schema_version": "1",
+            "pdf_sha256": sha256_file(args.pdf),
+            "template_sha256": sha256_file(args.template),
+            "candidates_sha256": sha256_file(args.candidates_json),
+            "page": args.page,
+            "symbol_id": args.symbol_id,
+        }
+        mismatches = [
+            key
+            for key, value in expected.items()
+            if provenance_manifest.get(key) != value
+        ]
+        if mismatches:
+            raise ValueError(
+                "Detection provenance mismatch for: " + ", ".join(mismatches)
+            )
+        provenance_verified = True
     doc = fitz.open(args.pdf)
     if not 1 <= args.page <= len(doc):
         raise ValueError(f"page must be between 1 and {len(doc)}")
@@ -157,6 +189,7 @@ def main() -> None:
         not unresolved_ids
         and not uncertain_ids
         and args.wall_door_sweep_completed
+        and provenance_verified
     )
     clarification_required = bool(unresolved_ids or uncertain_ids)
     warning_parts = []
@@ -166,6 +199,8 @@ def main() -> None:
         warning_parts.append(f"{len(uncertain_ids)} candidates remain uncertain")
     if not args.wall_door_sweep_completed:
         warning_parts.append("wall/door sweep is not confirmed")
+    if not provenance_verified:
+        warning_parts.append("detection provenance is not verified")
     review_warning = "; ".join(warning_parts) or None
     report = {
         "source_pdf": str(Path(args.pdf)),
@@ -188,6 +223,10 @@ def main() -> None:
         "clarification_required": clarification_required,
         "review_notes": args.review_notes,
         "review_warning": review_warning,
+        "provenance_verified": provenance_verified,
+        "detection_manifest": str(Path(args.detection_manifest).resolve())
+        if args.detection_manifest
+        else None,
         "detections": records,
     }
     (output / "quantity_report.json").write_text(

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "source_pdf_sha256": "replace-with-64-character-sha256",
+  "page": 1,
+  "review_complete": true,
+  "clarification_required": false,
+  "review_notes": "Complete visual sweep against the confirmed project legend.",
+  "detections": [
+    {
+      "ground_truth_id": "GT-0001",
+      "symbol_id": "DUPLEX_SOCKET_OUTLET",
+      "center_x_pt": 512.3,
+      "center_y_pt": 284.1
+    }
+  ]
+}

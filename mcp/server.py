@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -8,7 +9,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.1.5"
+VERSION = "0.2.0"
 ROOT = Path(__file__).resolve().parent
 ENGINE = ROOT / "engine"
 TEMPLATES = ROOT / "assets" / "templates"
@@ -16,6 +17,7 @@ if str(ENGINE) not in sys.path:
     sys.path.insert(0, str(ENGINE))
 
 from detect_compound_symbol import detect_with_context  # noqa: E402
+from accuracy_benchmark import evaluate_files  # noqa: E402
 from layer_inventory import analyze_layer_signatures  # noqa: E402
 from sheet_context import (  # noqa: E402
     get_sheet_context,
@@ -94,7 +96,31 @@ SYMBOLS = {
         "name": "Fire Alarm End of Line",
         "visual_rule": "Circuit accessory, reported separately from primary equipment.",
     },
+    "FIRE_ALARM_BELL_WALL_MOUNTED_WP": {
+        "template": None,
+        "system_id": "FIRE_ALARM",
+        "name": "Fire Alarm Bell Wall Mounted, Weatherproof",
+        "visual_rule": "Bell symbol with explicit WP suffix; keep separate from the indoor bell.",
+    },
+    "FIRE_ALARM_MANUAL_STATION_WP": {
+        "template": None,
+        "system_id": "FIRE_ALARM",
+        "name": "Fire Alarm Manual Station, Weatherproof",
+        "visual_rule": "Manual-station symbol with explicit WP suffix; keep separate from the indoor station.",
+    },
+    "FIRE_ALARM_STROBE_LIGHT_WP": {
+        "template": None,
+        "system_id": "FIRE_ALARM",
+        "name": "Fire Alarm Strobe Light, Weatherproof",
+        "visual_rule": "Strobe symbol with explicit WP suffix; keep separate from the indoor strobe.",
+    },
 }
+
+for symbol_rule in SYMBOLS.values():
+    if symbol_rule.get("system_id") == "FIRE_ALARM":
+        symbol_rule.setdefault(
+            "layer_tokens", ["SWT-E-FA", "FIRE", "ALARM"]
+        )
 
 SYMBOLS.update({
     "POWER_RECEPTACLE_3P_N_E": {
@@ -214,6 +240,7 @@ for symbol_id, name in LIGHTING_SYMBOLS.items():
 SYSTEMS = {
     "POWER": {
         "name": "Power System",
+        "discipline_id": "ELECTRICAL",
         "symbol_ids": [
             "DUPLEX_SOCKET_OUTLET",
             "SINGLE_SOCKET_OUTLET",
@@ -223,28 +250,73 @@ SYSTEMS = {
     },
     "FIRE_ALARM": {
         "name": "Fire Alarm System",
+        "discipline_id": "ELV",
         "symbol_ids": [
             "FIRE_ALARM_CONTROL_PANEL",
             "SMOKE_DETECTOR_PHOTOELECTRIC",
             "HEAT_DETECTOR_FIXED_135F",
             "HEAT_DETECTOR_FIXED_200F",
             "FIRE_ALARM_BELL_WALL_MOUNTED",
+            "FIRE_ALARM_BELL_WALL_MOUNTED_WP",
             "FIRE_ALARM_MANUAL_STATION",
+            "FIRE_ALARM_MANUAL_STATION_WP",
             "FIRE_ALARM_STROBE_LIGHT",
+            "FIRE_ALARM_STROBE_LIGHT_WP",
             "FIRE_ALARM_END_OF_LINE",
         ],
     },
     "DATA_VOICE": {
         "name": "Data and Voice System",
+        "discipline_id": "ELV",
         "symbol_ids": ["DATA_OUTLET", *DATA_VOICE_SYMBOLS],
     },
     "CCTV_SECURITY": {
         "name": "CCTV and Security System",
+        "discipline_id": "ELV",
         "symbol_ids": list(CCTV_SECURITY_SYMBOLS),
     },
     "LIGHTING": {
         "name": "Lighting System",
+        "discipline_id": "ELECTRICAL",
         "symbol_ids": list(LIGHTING_SYMBOLS),
+    },
+}
+
+DISCIPLINES = {
+    "ELECTRICAL": {
+        "name": "Electrical",
+        "status": "active",
+        "system_ids": ["POWER", "LIGHTING"],
+    },
+    "ELV": {
+        "name": "Extra-Low Voltage",
+        "status": "active",
+        "system_ids": ["FIRE_ALARM", "DATA_VOICE", "CCTV_SECURITY"],
+    },
+    "MECHANICAL": {
+        "name": "Mechanical and HVAC",
+        "status": "planned",
+        "planned_system_ids": ["AIR_CONDITIONING", "VENTILATION"],
+    },
+    "PLUMBING": {
+        "name": "Plumbing and Sanitary",
+        "status": "planned",
+        "planned_system_ids": ["WATER_SUPPLY", "DRAINAGE", "SANITARY"],
+    },
+    "FIRE_PROTECTION": {
+        "name": "Fire Protection",
+        "status": "planned",
+        "planned_system_ids": ["SPRINKLER", "HYDRANT", "FIRE_PUMP"],
+    },
+    "ARCHITECTURAL": {
+        "name": "Architectural",
+        "status": "planned",
+        "planned_system_ids": ["DOOR", "WINDOW", "ROOM", "FINISH"],
+    },
+    "STRUCTURAL": {
+        "name": "Structural",
+        "status": "planned",
+        "planned_system_ids": ["COLUMN", "BEAM", "FOUNDATION"],
     },
 }
 
@@ -266,7 +338,14 @@ def _symbol_template(symbol_id: str, template_path: str | None = None) -> Path:
     if symbol_id not in SYMBOLS:
         raise ValueError(f"Unsupported symbol_id: {symbol_id}")
     if template_path:
-        return _require_file(template_path, "template")
+        template = _require_file(template_path, "template")
+        metadata = json.loads(template.read_text(encoding="utf-8"))
+        declared_symbol = metadata.get("symbol_id")
+        if declared_symbol and declared_symbol != symbol_id:
+            raise ValueError(
+                f"Template declares symbol_id={declared_symbol}, not {symbol_id}"
+            )
+        return template
     starter = SYMBOLS[symbol_id].get("template")
     if not starter:
         raise ValueError(
@@ -295,6 +374,14 @@ def _run(script: str, arguments: list[str]) -> dict[str, Any]:
 
 def _full_response(args: dict[str, Any]) -> bool:
     return str(args.get("response_detail", "compact")).lower() == "full"
+
+
+def _sha256_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def inspect_drawing(args: dict[str, Any]) -> dict[str, Any]:
@@ -352,17 +439,57 @@ def get_symbol_rules(args: dict[str, Any]) -> dict[str, Any]:
     return SYMBOLS
 
 
+def get_discipline_catalog(args: dict[str, Any]) -> dict[str, Any]:
+    """Expose product scope without presenting planned packs as implemented."""
+    discipline_id = args.get("discipline_id")
+    if discipline_id:
+        if discipline_id not in DISCIPLINES:
+            raise ValueError(f"Unsupported discipline_id: {discipline_id}")
+        return {
+            "product": "TakeoffLens",
+            "version": VERSION,
+            "discipline_id": discipline_id,
+            **DISCIPLINES[discipline_id],
+        }
+    return {
+        "product": "TakeoffLens",
+        "version": VERSION,
+        "core_capabilities": [
+            "inspect_pdf",
+            "render_page",
+            "vector_layer_analysis",
+            "symbol_candidate_detection",
+            "assisted_review",
+            "traceable_quantity_export",
+            "accuracy_benchmark",
+        ],
+        "active_discipline_ids": [
+            key for key, value in DISCIPLINES.items() if value["status"] == "active"
+        ],
+        "planned_discipline_ids": [
+            key for key, value in DISCIPLINES.items() if value["status"] == "planned"
+        ],
+        "disciplines": DISCIPLINES,
+    }
+
+
 def build_symbol_template(args: dict[str, Any]) -> dict[str, Any]:
     pdf = _require_file(args["pdf_path"], "PDF")
     output = Path(args["output_path"]).expanduser().resolve()
     roi = args["roi_pdf_points"]
     if len(roi) != 4:
         raise ValueError("roi_pdf_points must contain [x1, y1, x2, y2]")
-    result = _run("build_template_from_roi.py", [
+    command_args = [
         str(pdf), "--page", str(int(args.get("page", 1))),
         "--roi", *[str(float(value)) for value in roi],
         "--output", str(output),
-    ])
+    ]
+    if args.get("symbol_id"):
+        symbol_id = str(args["symbol_id"])
+        if symbol_id not in SYMBOLS:
+            raise ValueError(f"Unsupported symbol_id: {symbol_id}")
+        command_args.extend(["--symbol-id", symbol_id])
+    result = _run("build_template_from_roi.py", command_args)
     data = json.loads(output.read_text(encoding="utf-8"))
     response = {"output_path": str(output),
             "preview_path": str(output.with_name(output.stem + "_preview.png")),
@@ -467,13 +594,42 @@ def _detect_symbol_candidates_with_context(
         excluded_regions=args.get("excluded_regions", []),
         included_regions=args.get("included_regions", []),
         preferred_layer_tokens=SYMBOLS[symbol_id].get("layer_tokens", []),
+        variant_context=SYMBOLS[symbol_id].get("variant_context", "ANY"),
         context_cache_hit=context_cache_hit,
     )
-    candidates = json.loads((output / "candidates.json").read_text(encoding="utf-8"))
+    candidates_path = output / "candidates.json"
+    candidate_pool_path = output / "candidate_pool.json"
+    candidates = json.loads(candidates_path.read_text(encoding="utf-8"))
+    detection_manifest = {
+        "schema_version": "1",
+        "plugin_version": VERSION,
+        "pipeline_version": diagnostics["pipeline_version"],
+        "pdf_path": str(context.pdf_path),
+        "pdf_sha256": _sha256_file(context.pdf_path),
+        "page": context.page_number,
+        "dpi": context.dpi,
+        "symbol_id": symbol_id,
+        "context_id": context.context_id,
+        "template_path": str(template),
+        "template_sha256": _sha256_file(template),
+        "candidates_json": str(candidates_path),
+        "candidates_sha256": _sha256_file(candidates_path),
+        "candidate_pool_json": str(candidate_pool_path),
+        "candidate_pool_sha256": _sha256_file(candidate_pool_path),
+        "parameters": diagnostics["parameters"],
+        "page_profile": diagnostics["page_profile"],
+    }
+    detection_manifest_path = output / "detection_manifest.json"
+    detection_manifest_path.write_text(
+        json.dumps(detection_manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return {
         "symbol_id": symbol_id,
         "candidate_count": len(candidates),
         "candidates_json": str(output / "candidates.json"),
+        "candidate_pool_json": str(output / "candidate_pool.json"),
+        "detection_manifest_json": str(detection_manifest_path),
         "filtered_candidates_json": str(output / "filtered_candidates.json"),
         "filtered_candidates_markup": str(output / "filtered_candidates.png"),
         "candidates_csv": str(output / "candidates.csv"),
@@ -481,7 +637,7 @@ def _detect_symbol_candidates_with_context(
         "review_html": str(output / "review.html"),
         "diagnostics": diagnostics,
         "template_path": str(template),
-        "warning": "Candidate Filtering v2 suppresses strong text, annotation-layer, and region evidence while preserving an audit file. Visual review remains mandatory.",
+        "warning": "Candidate Filtering v3 suppresses strong text, annotation-layer, and region evidence while preserving an audit file. Visual review remains mandatory, including indoor/WP classification.",
         "stdout": (
             f"Context {context.context_id}; {len(candidates)} candidates; "
             f"detection {diagnostics['timing_seconds']['detection_total']:.3f}s"
@@ -506,6 +662,8 @@ def detect_symbol_candidates(args: dict[str, Any]) -> dict[str, Any]:
             "symbol_id": result["symbol_id"],
             "candidate_count": result["candidate_count"],
             "candidates_json": result["candidates_json"],
+            "candidate_pool_json": result["candidate_pool_json"],
+            "detection_manifest_json": result["detection_manifest_json"],
             "filtered_candidates_json": result["filtered_candidates_json"],
             "markup_path": result["markup_path"],
             "review_html": result["review_html"],
@@ -533,6 +691,16 @@ def confirm_symbol_count(args: dict[str, Any]) -> dict[str, Any]:
         "--dpi", str(int(args.get("dpi", 300))),
         "--symbol-id", symbol_id, "--output", str(output),
     ]
+    detection_manifest = args.get("detection_manifest_json")
+    if not detection_manifest:
+        discovered_manifest = candidates.with_name("detection_manifest.json")
+        if discovered_manifest.is_file():
+            detection_manifest = str(discovered_manifest)
+    if detection_manifest:
+        manifest_path = _require_file(
+            detection_manifest, "detection_manifest_json"
+        )
+        command_args.extend(["--detection-manifest", str(manifest_path)])
     accepted_ids = [str(value) for value in args.get("accepted_ids", [])]
     if accepted_ids:
         command_args.extend(["--accept", *accepted_ids])
@@ -569,6 +737,7 @@ def confirm_symbol_count(args: dict[str, Any]) -> dict[str, Any]:
         "report_csv": str(output / "quantity_report.csv"),
         "markup_path": str(output / f"confirmed_{symbol_id.lower()}.png"),
         "review_warning": report.get("review_warning"),
+        "provenance_verified": report["provenance_verified"],
     }
     if _full_response(args):
         response["stdout"] = result["stdout"]
@@ -594,7 +763,7 @@ def _write_contact_sheet(runs: list[dict[str, Any]], output: Path) -> str | None
         draw = ImageDraw.Draw(sheet)
         draw.text(
             (24, 72),
-            "No candidates after Candidate Filtering v2. Review filtered_candidates.json and sweep the plan before confirming zero.",
+            "No candidates after Candidate Filtering v3. Review filtered_candidates.json and sweep the plan before confirming zero.",
             fill="black",
             font=ImageFont.load_default(),
         )
@@ -631,7 +800,7 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
     system_id = str(args["system_id"])
     if system_id not in SYSTEMS:
         raise ValueError(
-            f"v0.1.5 supports only {sorted(SYSTEMS)}; received {system_id}"
+            f"v0.2.0 supports only {sorted(SYSTEMS)}; received {system_id}"
         )
     page = int(args.get("page", 1))
     dpi = int(args.get("dpi", 300))
@@ -660,7 +829,7 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
     ]
     if invalid:
         raise ValueError(
-            f"Symbols outside {system_id} v0.1.5 scope: {sorted(invalid)}"
+            f"Symbols outside {system_id} v0.2.0 scope: {sorted(invalid)}"
         )
 
     template_paths = args.get("template_paths", {})
@@ -763,6 +932,8 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
                 "symbol_id": run["symbol_id"],
                 "candidate_count": run["candidate_count"],
                 "candidates_json": run["candidates_json"],
+                "candidate_pool_json": run["candidate_pool_json"],
+                "detection_manifest_json": run["detection_manifest_json"],
                 "review_html": run["review_html"],
             }
             for run in runs
@@ -775,6 +946,58 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
         "manifest_json": str(manifest_path),
         "next_step": "Review the overview/contact sheet, build only missing templates, then confirm every candidate.",
     }
+
+
+def evaluate_detection_accuracy(args: dict[str, Any]) -> dict[str, Any]:
+    symbol_id = str(args["symbol_id"])
+    if symbol_id not in SYMBOLS:
+        raise ValueError(f"Unsupported symbol_id: {symbol_id}")
+    candidates = _require_file(args["candidates_json"], "candidates_json")
+    detection_manifest = _require_file(
+        args["detection_manifest_json"], "detection_manifest_json"
+    )
+    ground_truth = _require_file(args["ground_truth_json"], "ground_truth_json")
+    candidate_pool = None
+    if args.get("candidate_pool_json"):
+        candidate_pool = _require_file(
+            args["candidate_pool_json"], "candidate_pool_json"
+        )
+    result = evaluate_files(
+        candidates_json=candidates,
+        candidate_pool_json=candidate_pool,
+        detection_manifest_json=detection_manifest,
+        ground_truth_json=ground_truth,
+        symbol_id=symbol_id,
+        match_radius_pt=float(args.get("match_radius_pt", 8.0)),
+    )
+    output = Path(
+        args.get("output_path") or candidates.with_name("accuracy_report.json")
+    ).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    if _full_response(args):
+        return {**result, "accuracy_report_json": str(output)}
+    response = {
+        "symbol_id": symbol_id,
+        "precision": result["shortlist"]["precision"],
+        "recall": result["shortlist"]["recall"],
+        "f1": result["shortlist"]["f1"],
+        "true_positive_count": result["shortlist"]["true_positive_count"],
+        "false_positive_count": result["shortlist"]["false_positive_count"],
+        "false_negative_count": result["shortlist"]["false_negative_count"],
+        "accuracy_report_json": str(output),
+    }
+    if "candidate_pool" in result:
+        response.update({
+            "candidate_pool_recall": result["candidate_pool"]["recall"],
+            "filter_false_negative_count": result["filter_false_negative_count"],
+            "shortlist_limit_false_negative_count": result[
+                "shortlist_limit_false_negative_count"
+            ],
+        })
+    return response
 
 
 def _schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -809,6 +1032,13 @@ DETECTION_OPTIONS = {
 
 TOOLS = [
     {
+        "name": "get_discipline_catalog",
+        "description": "Return active and planned TakeoffLens disciplines without treating roadmap packs as supported.",
+        "inputSchema": _schema({
+            "discipline_id": {"type": "string", "enum": list(DISCIPLINES)},
+        }, []),
+    },
+    {
         "name": "inspect_drawing",
         "description": "Run native Page Profiler v2 before symbol counting.",
         "inputSchema": _schema({"pdf_path": {"type": "string"}}, ["pdf_path"]),
@@ -837,6 +1067,7 @@ TOOLS = [
         "description": "Build a project-specific vector template from a clean legend ROI.",
         "inputSchema": _schema({
             "pdf_path": {"type": "string"},
+            "symbol_id": {"type": "string", "enum": list(SYMBOLS)},
             "page": {"type": "integer", "minimum": 1},
             "roi_pdf_points": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
             "output_path": {"type": "string"},
@@ -908,14 +1139,30 @@ TOOLS = [
             **DETECTION_OPTIONS,
         }, ["pdf_path", "system_id", "output_dir"]),
     },
+    {
+        "name": "evaluate_detection_accuracy",
+        "description": "Measure shortlist precision/recall against fully reviewed PDF-point ground truth and attribute misses to filtering or shortlist limits.",
+        "inputSchema": _schema({
+            "candidates_json": {"type": "string"},
+            "detection_manifest_json": {"type": "string"},
+            "candidate_pool_json": {"type": "string"},
+            "ground_truth_json": {"type": "string"},
+            "symbol_id": {"type": "string", "enum": list(SYMBOLS)},
+            "match_radius_pt": {"type": "number", "exclusiveMinimum": 0, "default": 8.0},
+            "output_path": {"type": "string"},
+            "response_detail": RESPONSE_DETAIL,
+        }, ["candidates_json", "detection_manifest_json", "ground_truth_json", "symbol_id"]),
+    },
 ]
 
-HANDLERS = {"inspect_drawing": inspect_drawing, "render_page": render_page,
+HANDLERS = {"get_discipline_catalog": get_discipline_catalog,
+            "inspect_drawing": inspect_drawing, "render_page": render_page,
             "get_symbol_rules": get_symbol_rules, "build_symbol_template": build_symbol_template,
             "analyze_vector_layers": analyze_vector_layers,
             "detect_symbol_candidates": detect_symbol_candidates,
             "confirm_symbol_count": confirm_symbol_count,
-            "prepare_sheet_audit": prepare_sheet_audit}
+            "prepare_sheet_audit": prepare_sheet_audit,
+            "evaluate_detection_accuracy": evaluate_detection_accuracy}
 
 
 def _response(request_id: Any, result: Any = None, error: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -931,7 +1178,7 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
         requested = message.get("params", {}).get("protocolVersion", "2025-06-18")
         return _response(request_id, {"protocolVersion": requested,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "engineering-drawing-estimator", "version": VERSION}})
+            "serverInfo": {"name": "takeoff-lens", "version": VERSION}})
     if method == "notifications/initialized":
         return None
     if method == "ping":

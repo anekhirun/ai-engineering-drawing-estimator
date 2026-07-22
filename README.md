@@ -1,10 +1,24 @@
-# AI Engineering Drawing Estimator v0.1.5
+# TakeoffLens v0.2.0
 
-**AI Agent MCP + Skill for reviewed symbol counting and quantity takeoff**
+**AI drawing intelligence for reviewed, traceable quantity takeoff**
 
-An installable Plugin that bundles the assisted-review MCP server and Agent Skill for counting Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering PDF drawings. The same Skill + MCP architecture remains available for manual installation; the experimental Windows Desktop App remains optional.
+TakeoffLens is an installable Plugin that turns engineering drawings into reviewed quantities with source evidence. Electrical and ELV are the first active disciplines: Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security. Its shared Core + Discipline architecture is designed to expand to Mechanical/HVAC, Plumbing, Fire Protection, Architectural, Structural, and other building systems without presenting roadmap packs as already supported. The experimental Windows Desktop App remains optional.
 
 > This is not a fully automatic quantity takeoff system. Every candidate must be reviewed before reporting a final count.
+
+## Product scope
+
+TakeoffLens does not claim to understand every PDF. It focuses on engineering
+drawings and combines PDF inspection, vector/layer evidence, symbol candidates,
+human review, provenance, and accuracy measurement.
+
+- **TakeoffLens Core:** PDF inspection and rendering, vector-layer analysis,
+  candidate detection, assisted review, traceable export, and benchmarking.
+- **Active v0.2.0 disciplines:** Electrical and ELV.
+- **Planned discipline packs:** Mechanical/HVAC, Plumbing/Sanitary, Fire
+  Protection, Architectural, and Structural.
+- `get_discipline_catalog` is the machine-readable source of truth for active
+  and planned scope.
 
 ## Supported workflow
 
@@ -14,12 +28,12 @@ An installable Plugin that bundles the assisted-review MCP server and Agent Skil
 - Prepare a complete one-sheet audit with one MCP call for:
   - Power: Duplex/Single Socket Outlet, 3P+N+E Power Receptacle, and Non-Fuse Disconnecting Switch.
   - Lighting: switches, junction/control devices, normal luminaires, emergency lighting, and exit signs.
-  - Fire Alarm: control panel, smoke detector, 135/200 F heat detector, bell,
-    manual station, strobe light, and end-of-line accessory.
+  - Fire Alarm: control panel, smoke detector, 135/200 F heat detector, indoor
+    and weatherproof bell/manual-station/strobe variants, and end-of-line accessory.
   - Data/Voice: panels, cabinets, telephone outlets, and RJ45 data outlets.
   - CCTV/Security: cameras, monitoring, access-control, alarm, and door-control devices.
 - Use bundled starter templates where available and project-specific legend templates for every other class.
-- Candidate Filtering v2 measures text coverage across the whole symbol ROI,
+- Candidate Filtering v3 measures text coverage across the whole symbol ROI,
   not only its center.
 - Preserve PDF/CAD layer metadata and suppress strong text, dimension,
   annotation, and non-outlet layer matches when a Power outlet layer exists.
@@ -31,11 +45,17 @@ An installable Plugin that bundles the assisted-review MCP server and Agent Skil
 - Cache up to two prepared sheet contexts in memory without locking source PDFs on Windows;
   unusually large renders are released while geometry remains cached.
 - Record template hashes, validation warnings, score breakdowns, and per-stage timing.
+- Write a detection manifest that binds the PDF, page, template, candidates, and
+  detector parameters with SHA-256 evidence.
+- Preserve the complete post-NMS candidate pool so filtered and shortlist-limit
+  false negatives can be measured instead of disappearing from the audit trail.
 - Create project-specific symbol templates from a clean legend ROI.
 - Export candidate crops, markup, CSV, JSON, and an HTML review page.
 - Confirm reviewed candidates and add manually verified points.
 - Record accepted, rejected, uncertain, and unresolved candidates in the audit report.
-- Mark a result final only when `review_complete` is true.
+- Mark a result final only when `review_complete` and `provenance_verified` are true.
+- Measure precision, recall, F1, and stage-attributed misses against fully
+  reviewed PDF-point ground truth.
 
 No project drawings, customer files, marked-up plans, test outputs, or machine-specific paths are included in this repository.
 
@@ -68,7 +88,7 @@ Mouse wheel zooms the drawing. Drag to pan; enable **manual point mode** before 
 
 ### Plugin installation (recommended)
 
-v0.1.5 packages the repository as `engineering-drawing-estimator` with:
+v0.2.0 packages the repository as `takeoff-lens` with:
 
 - `.codex-plugin/plugin.json` for one versioned install surface.
 - `.mcp.json` for the bundled local MCP server.
@@ -79,9 +99,11 @@ v0.1.5 packages the repository as `engineering-drawing-estimator` with:
 The plugin processes drawings locally and does not upload project PDFs. The
 first MCP launch requires Python 3 and internet access to install the pinned
 Python packages. Later launches reuse the dependency hash and start directly.
-Managed or offline installations can set `ENGINEERING_DRAWING_ESTIMATOR_PYTHON`
+Managed or offline installations can set `TAKEOFFLENS_PYTHON`
 to an existing compatible Python executable; the launcher then skips dependency
-installation and starts the bundled server with that environment.
+installation and starts the bundled server with that environment. The legacy
+`ENGINEERING_DRAWING_ESTIMATOR_PYTHON` variable remains accepted as a
+compatibility alias during migration.
 
 Maintainers can build the public local-marketplace package with:
 
@@ -90,9 +112,9 @@ Maintainers can build the public local-marketplace package with:
 ```
 
 The command creates
-`release/engineering-drawing-estimator-plugin-v0.1.5.zip`. After extracting the
+`release/takeoff-lens-plugin-v0.2.0.zip`. After extracting the
 archive, add its `plugin-marketplace` directory as a marketplace and install
-`engineering-drawing-estimator` from the Codex Plugins Directory. The archive
+`takeoff-lens` from the Codex Plugins Directory. The archive
 contains only the Plugin, Skill, MCP source, templates, runtime launcher, and
 public documentation.
 
@@ -115,7 +137,9 @@ The installer:
 
 Add the generated MCP block to `~/.codex/config.toml`, then restart the agent.
 
-When upgrading from v0.1.1, remove the old `[mcp_servers.drawing-estimate-reader]` block and use the generated `[mcp_servers.engineering-drawing-estimator]` block.
+When upgrading, remove old `[mcp_servers.drawing-estimate-reader]` and
+`[mcp_servers.engineering-drawing-estimator]` blocks before adding the generated
+`[mcp_servers.takeoff-lens]` block. Keep only one MCP registration.
 
 For another agent, register a `stdio` MCP server using:
 
@@ -137,6 +161,7 @@ If any symbol or candidate is uncertain, show its crop, markup ID, or coordinate
 
 | Tool | Purpose |
 |---|---|
+| `get_discipline_catalog` | Report active and planned TakeoffLens disciplines |
 | `inspect_drawing` | Classify PDF pages before analysis |
 | `render_page` | Render a page for legend and plan review |
 | `get_symbol_rules` | Return supported symbol/context rules |
@@ -145,6 +170,34 @@ If any symbol or candidate is uncertain, show its crop, markup ID, or coordinate
 | `detect_symbol_candidates` | Generate a high-recall candidate shortlist |
 | `confirm_symbol_count` | Export confirmed counts and auditable markup |
 | `prepare_sheet_audit` | Inspect, render, detect all ready symbols, and create one review contact sheet |
+| `evaluate_detection_accuracy` | Measure reviewed precision/recall and attribute misses to filtering or shortlist limits |
+
+## v0.2.0 accuracy and provenance
+
+- Every detection run writes `detection_manifest.json` with SHA-256 hashes for
+  the source PDF, template, `candidates.json`, and `candidate_pool.json`.
+- `confirm_symbol_count` automatically discovers the manifest beside the
+  candidate file, or accepts `detection_manifest_json` explicitly. A hash,
+  page, or symbol mismatch stops confirmation.
+- Legacy candidate files without a verified manifest remain reviewable, but
+  cannot return `review_complete: true`.
+- `candidate_pool.json` contains shortlisted, filtered, and `ranked_out`
+  candidates. A clean overlapping candidate is prioritized during NMS so a
+  text/annotation-filtered match cannot hide it.
+- v0.2.0 templates declare `symbol_id` and template type. Passing a template
+  that declares a different symbol stops the run instead of silently applying
+  the wrong geometry.
+- `evaluate_detection_accuracy` accepts only ground truth with
+  `review_complete: true` and no unresolved clarification. It writes exact
+  TP/FP/FN IDs plus precision, recall, and F1.
+- Maintainers can keep private drawing suites outside Git and run
+  `scripts/run-accuracy-benchmark.py`; see `benchmarks/README.md`. The runner
+  verifies the PDF hash before detection and can fail a quality gate.
+- The first private, fully reviewed Fire Alarm baseline covers 8 symbol classes
+  and 10 confirmed locations on one vector sheet. Layer-aware filtering reduced
+  false positives from 83 to 25 while preserving recall at `1.000`; final
+  shortlist precision is `0.286` and F1 is `0.444`. This is a regression
+  baseline for one sheet, not a general production-accuracy claim.
 
 ## v0.1.4 native pipeline optimization
 
@@ -162,7 +215,7 @@ If any symbol or candidate is uncertain, show its crop, markup ID, or coordinate
   the same in-memory context when possible.
 - Candidate JSON retains the legacy `score` while adding `geometry_score`,
   `final_score`, `score_version`, and filtering provenance.
-- Candidate Filtering v2 writes every automatically suppressed geometry match to
+- Candidate Filtering v3 writes every automatically suppressed geometry match to
   `filtered_candidates.json`, including its source layers and filter reasons.
 - `exclude_annotation_layers=false` disables layer-based suppression for unusual
   drawings; final counts still require review.

@@ -1,4 +1,7 @@
 {
+  "template_schema_version": "2",
+  "symbol_id": "DUPLEX_SOCKET_OUTLET",
+  "template_type": "starter",
   "source_pdf": "redacted-project-symbol-legend.pdf",
   "source_page": 1,
   "roi_pdf_points": [

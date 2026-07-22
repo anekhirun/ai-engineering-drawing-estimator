@@ -1,0 +1,21 @@
+{
+  "schema_version": "1",
+  "thresholds": {
+    "min_recall": 0.95,
+    "min_precision": 0.5
+  },
+  "cases": [
+    {
+      "case_id": "project-sheet-symbol",
+      "pdf_path": "drawing.pdf",
+      "page": 1,
+      "symbol_id": "DUPLEX_SOCKET_OUTLET",
+      "template_path": "duplex-template.json",
+      "ground_truth_json": "duplex-ground-truth.json",
+      "match_radius_pt": 8,
+      "detection_options": {
+        "shortlist_limit": 100
+      }
+    }
+  ]
+}

@@ -18,6 +18,11 @@ Every final detection must contain:
 }
 ```
 
+TakeoffLens classifies product scope separately from detection results.
+`get_discipline_catalog` reports `active` packs that may be processed and
+`planned` packs that must not be presented as supported. Every active system
+also declares its parent `discipline_id`.
+
 Candidate diagnostics should also record the native `context_id`, Page Profiler
 v2 result, template hash and validation, cache status, excluded regions, filter
 counts, and per-stage timings. These fields improve reproducibility but never
@@ -45,10 +50,16 @@ Required review evidence:
   "uncertain_ids": [],
   "unresolved_ids": [],
   "wall_door_sweep_completed": true,
+  "provenance_verified": true,
   "review_notes": "Checked wall faces, corners, and both sides of doors."
 }
 ```
 
-A count is final only when `review_complete` is `true`.
+A count is final only when `review_complete` and `provenance_verified` are `true`.
 If `clarification_required` is `true`, ask the user about the affected markup
 IDs or coordinates and rerun confirmation after recording the answer.
+
+Every v0.2.0 detector run also writes `detection_manifest.json` and
+`candidate_pool.json`. The manifest binds the PDF, page, template, candidate
+files, parameters, and page profile. The pool preserves `shortlisted`,
+`filtered`, and `ranked_out` records for benchmark miss attribution.
