@@ -1,6 +1,6 @@
 ---
 name: count-engineering-drawing-symbols
-description: Count and audit Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering DWG/DXF/PDF drawings by preferring CAD metadata, using vector geometry for vector PDFs, and using high-resolution vision only for raster PDFs. Use when an agent must count v0.1.4 equipment, compare floors or revisions, create candidate markups, or produce a reviewable quantity report from drawings.
+description: Count and audit Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering DWG/DXF/PDF drawings by preferring CAD metadata, using vector geometry for vector PDFs, and using high-resolution vision only for raster PDFs. Use when an agent must count v0.1.5 equipment, compare floors or revisions, create candidate markups, or produce a reviewable quantity report from drawings.
 ---
 
 # Count Engineering Drawing Symbols
@@ -9,8 +9,8 @@ Use the `engineering-drawing-estimator` MCP tools. Treat every automatic detecti
 
 ## Workflow
 
-1. Call `get_symbol_rules` with `system_id=POWER`, `LIGHTING`, `FIRE_ALARM`, `DATA_VOICE`, or `CCTV_SECURITY` to lock the v0.1.4 scope.
-2. Prefer DWG/DXF block, attribute, layer, and XREF extraction when CAD is available. For this v0.1.4 MCP, process vector/hybrid PDF directly.
+1. Call `get_symbol_rules` with `system_id=POWER`, `LIGHTING`, `FIRE_ALARM`, `DATA_VOICE`, or `CCTV_SECURITY` to lock the v0.1.5 scope.
+2. Prefer DWG/DXF block, attribute, layer, and XREF extraction when CAD is available. For this v0.1.5 MCP, process vector/hybrid PDF directly.
 3. On a clean vector sheet with meaningful equipment layers, call `analyze_vector_layers` first. Group by rotation-normalized dimensions, then apply only a user- or legend-confirmed project mapping. Save that mapping and reuse `signature_mapping_path`; never infer equipment class from a frequent shape alone.
 4. Call `prepare_sheet_audit`. It builds one native shared sheet context, profiles the page, renders an overview, detects every symbol with a ready template, and creates one candidate contact sheet. Use the returned manifest instead of repeating separate inspection calls.
 5. Read [references/symbol-rules.md](references/symbol-rules.md) before classification. Every class without a bundled starter requires either an unambiguous confirmed layer signature or a clean project-specific template from the current legend; build only templates listed in `template_required`, then rerun `prepare_sheet_audit`.
@@ -34,7 +34,7 @@ Use the `engineering-drawing-estimator` MCP tools. Treat every automatic detecti
 - Ask the user when the project legend is missing, multiple symbols look alike, a region boundary changes the subtotal, or visual/vector evidence conflicts.
 - In each question, state what is uncertain, where it is, the likely choices, and how each choice affects the count. Do not ask the user to inspect an unidentified location without a crop, markup ID, or coordinates.
 - If `confirm_symbol_count` returns `review_warning`, the zero is provisional until the candidate set and wall sweep are explicitly reviewed.
-- State uncertainty and detection method. Do not claim production-grade automatic accuracy in v0.1.4.
+- State uncertainty and detection method. Do not claim production-grade automatic accuracy in v0.1.5.
 
 ## Failure handling
 

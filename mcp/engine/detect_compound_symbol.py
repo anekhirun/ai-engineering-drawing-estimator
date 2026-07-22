@@ -233,7 +233,7 @@ def save_outputs(image, candidates, template, output, dpi, suppressed=None):
     repeat(auto-fill,minmax(310px,1fr));gap:14px}}article{{display:flex;gap:12px;
     border:1px solid #aaa;padding:10px;border-radius:8px}}img{{width:160px;height:
     160px;object-fit:contain;border:1px solid #ddd}}</style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.4 Candidate Review</h1>
+    <h1>AI Engineering Drawing Estimator v0.1.5 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <main>{cards}</main></body></html>"""
     (output / "review.html").write_text(review, encoding="utf-8")
@@ -261,7 +261,7 @@ def write_interactive_review(candidates, output):
     article.uncertain{{border-color:#d28b00;background:#fff9e8}}
     .toolbar{{position:sticky;top:0;background:white;padding:10px 0;z-index:2}}
     </style></head><body>
-    <h1>AI Engineering Drawing Estimator v0.1.4 Candidate Review</h1>
+    <h1>AI Engineering Drawing Estimator v0.1.5 Candidate Review</h1>
     <p>Shortlist: {len(candidates)} - review before reporting quantity.</p>
     <div class="toolbar"><b id="counts"></b>
     <button onclick="exportDecisions()">Export decisions.json</button></div>
@@ -578,7 +578,7 @@ def detect_with_context(
     )
     # Preserve the v0.1.3 shortlist order so optimization cannot silently hide a
     # previously visible high-recall candidate. final_score is diagnostic in
-    # v0.1.4 until it has drawing-backed regression evidence.
+    # v0.1.5 until it has drawing-backed regression evidence.
     ranked = sorted(raw_candidates, key=lambda item: (item.score, item.constellation_error))
     candidates = ranked[:shortlist_limit] if shortlist_limit > 0 else ranked
     output_path = Path(output).resolve()

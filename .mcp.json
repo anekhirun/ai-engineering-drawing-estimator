@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "engineering-drawing-estimator": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "./plugin-mcp.ps1"
+      ],
+      "cwd": ".",
+      "startup_timeout_sec": 300,
+      "tool_timeout_sec": 300
+    }
+  }
+}
