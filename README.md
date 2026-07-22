@@ -1,8 +1,8 @@
-# AI Engineering Drawing Estimator v0.1.4
+# AI Engineering Drawing Estimator v0.1.5
 
 **AI Agent MCP + Skill for reviewed symbol counting and quantity takeoff**
 
-An assisted-review MCP server and Agent Skill for counting Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering PDF drawings with ChatGPT Codex, Hermes, and other MCP-compatible AI agents. The MCP + Skill workflow is the primary interface in v0.1.4; the experimental Windows Desktop App remains available but is not the current development focus.
+An installable Plugin that bundles the assisted-review MCP server and Agent Skill for counting Power, Lighting, Fire Alarm, Data/Voice, and CCTV/Security symbols in engineering PDF drawings. The same Skill + MCP architecture remains available for manual installation; the experimental Windows Desktop App remains optional.
 
 > This is not a fully automatic quantity takeoff system. Every candidate must be reviewed before reporting a final count.
 
@@ -65,6 +65,38 @@ Mouse wheel zooms the drawing. Drag to pan; enable **manual point mode** before 
 - An MCP-compatible AI agent such as Codex or Hermes (optional for the Desktop App)
 
 ## Install
+
+### Plugin installation (recommended)
+
+v0.1.5 packages the repository as `engineering-drawing-estimator` with:
+
+- `.codex-plugin/plugin.json` for one versioned install surface.
+- `.mcp.json` for the bundled local MCP server.
+- The existing `skills/count-engineering-drawing-symbols` workflow.
+- `plugin-mcp.ps1`, which creates a private per-user MCP environment on first
+  launch and installs only the headless MCP dependencies.
+
+The plugin processes drawings locally and does not upload project PDFs. The
+first MCP launch requires Python 3 and internet access to install the pinned
+Python packages. Later launches reuse the dependency hash and start directly.
+Managed or offline installations can set `ENGINEERING_DRAWING_ESTIMATOR_PYTHON`
+to an existing compatible Python executable; the launcher then skips dependency
+installation and starts the bundled server with that environment.
+
+Maintainers can build the public local-marketplace package with:
+
+```powershell
+.\scripts\build-plugin-package.ps1
+```
+
+The command creates
+`release/engineering-drawing-estimator-plugin-v0.1.5.zip`. After extracting the
+archive, add its `plugin-marketplace` directory as a marketplace and install
+`engineering-drawing-estimator` from the Codex Plugins Directory. The archive
+contains only the Plugin, Skill, MCP source, templates, runtime launcher, and
+public documentation.
+
+### Manual Skill + MCP installation
 
 Clone or download this repository, then run:
 

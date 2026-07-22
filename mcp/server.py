@@ -8,7 +8,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 ROOT = Path(__file__).resolve().parent
 ENGINE = ROOT / "engine"
 TEMPLATES = ROOT / "assets" / "templates"
@@ -631,7 +631,7 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
     system_id = str(args["system_id"])
     if system_id not in SYSTEMS:
         raise ValueError(
-            f"v0.1.4 supports only {sorted(SYSTEMS)}; received {system_id}"
+            f"v0.1.5 supports only {sorted(SYSTEMS)}; received {system_id}"
         )
     page = int(args.get("page", 1))
     dpi = int(args.get("dpi", 300))
@@ -660,7 +660,7 @@ def prepare_sheet_audit(args: dict[str, Any]) -> dict[str, Any]:
     ]
     if invalid:
         raise ValueError(
-            f"Symbols outside {system_id} v0.1.4 scope: {sorted(invalid)}"
+            f"Symbols outside {system_id} v0.1.5 scope: {sorted(invalid)}"
         )
 
     template_paths = args.get("template_paths", {})

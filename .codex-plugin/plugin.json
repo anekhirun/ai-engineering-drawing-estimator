@@ -1,0 +1,31 @@
+{
+  "name": "engineering-drawing-estimator",
+  "version": "0.1.5",
+  "description": "Local assisted review for electrical and communication drawing quantities.",
+  "author": {
+    "name": "anekhirun",
+    "email": "anekhirun01@gmail.com",
+    "url": "https://github.com/anekhirun"
+  },
+  "homepage": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
+  "repository": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
+  "license": "MIT",
+  "keywords": ["engineering", "drawing", "quantity-takeoff", "pdf", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AI Engineering Drawing Estimator",
+    "shortDescription": "Review electrical drawing quantities locally.",
+    "longDescription": "Bundle the reviewed drawing-counting Skill and local native PDF MCP server in one versioned package.",
+    "developerName": "anekhirun",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/anekhirun/ai-engineering-drawing-estimator",
+    "defaultPrompt": [
+      "Audit this electrical PDF and review every candidate.",
+      "Count this drawing by system and floor with markup.",
+      "Inspect this vector PDF using confirmed project mappings."
+    ],
+    "brandColor": "#174A64"
+  }
+}

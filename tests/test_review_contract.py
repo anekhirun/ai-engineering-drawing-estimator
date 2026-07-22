@@ -115,7 +115,7 @@ class ReviewContractTests(unittest.TestCase):
         self.assertIn("uncertain", result["review_warning"])
 
     def test_version_and_tool_surface(self) -> None:
-        self.assertEqual(VERSION, "0.1.4")
+        self.assertEqual(VERSION, "0.1.5")
         self.assertEqual(len(TOOLS), 8)
         confirm_tool = next(tool for tool in TOOLS if tool["name"] == "confirm_symbol_count")
         properties = confirm_tool["inputSchema"]["properties"]
